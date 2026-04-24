@@ -63,7 +63,7 @@ export async function createBookingCheckoutSession(input: CreateCheckoutSessionI
           currency: "jpy",
           unit_amount: input.totalJpy,
           product_data: {
-            name: "TripGo Airport Transfer",
+            name: "XioohTravel Airport Transfer",
             description: `${routeLabel} | ${pickupDate} JST`,
           },
         },

@@ -1,7 +1,7 @@
 import { cookies, headers } from "next/headers";
 import { dicts, type Locale } from "./dicts";
 
-export const LOCALE_COOKIE = "TripGo_locale";
+export const LOCALE_COOKIE = "XioohTravel_locale";
 
 export function normalizeLocale(input: string | null | undefined): Locale {
   const v = (input ?? "").toLowerCase();
@@ -26,5 +26,4 @@ export async function getT() {
   }
   return { locale, t };
 }
-
 

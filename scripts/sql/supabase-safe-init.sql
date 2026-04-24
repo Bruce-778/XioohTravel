@@ -1,4 +1,4 @@
--- TripGo safe, idempotent PostgreSQL / Supabase bootstrap.
+-- XioohTravel safe, idempotent PostgreSQL / Supabase bootstrap.
 -- This script is intentionally non-destructive:
 -- - no DROP TABLE
 -- - no TRUNCATE

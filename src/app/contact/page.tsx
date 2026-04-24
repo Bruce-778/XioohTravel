@@ -39,7 +39,7 @@ export default async function ContactPage() {
                   </div>
                   <div>
                     <div className="text-sm font-medium text-slate-400 mb-1">{t("contact.email")}</div>
-                    <div className="text-xl font-bold tracking-tight">support@TripGo.com</div>
+                    <div className="text-xl font-bold tracking-tight">support@xioohtravel.com</div>
                   </div>
                 </div>
               </div>

@@ -8,7 +8,7 @@ import type { Currency } from "@/lib/currency";
 // Client-side currency helper
 function getCurrencyFromCookie(): Currency {
   if (typeof document === "undefined") return "JPY";
-  const cookie = document.cookie.split("; ").find((c) => c.startsWith("TripGo_currency="));
+  const cookie = document.cookie.split("; ").find((c) => c.startsWith("XioohTravel_currency="));
   const currencyFromCookie = cookie?.split("=")[1]?.toUpperCase();
   if (currencyFromCookie === "USD" || currencyFromCookie === "CNY") {
     return currencyFromCookie;

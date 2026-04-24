@@ -4,7 +4,7 @@ export type Dict = Record<string, string>;
 
 export const dicts: Record<Locale, Dict> = {
   zh: {
-    "brand.name": "TripGo",
+    "brand.name": "XioohTravel",
     "brand.tagline": "机场接送机",
     "nav.home": "首页",
     "nav.contact": "联系我们",
@@ -22,7 +22,7 @@ export const dicts: Record<Locale, Dict> = {
     "currency.usd": "美元 USD",
 
     "home.badge": "固定价格 · 中文客服 · 多车型可选",
-    "home.title": "TripGo 机场接送预订",
+    "home.title": "XioohTravel 机场接送预订",
     "home.subtitle":
       "像 Ctrip / Klook 一样快速下单：填写航班、上车点、下车点、人数行李，选择车型即可完成预订。",
     "home.chip.urgent": "急单支持：24小时内可订",
@@ -360,7 +360,7 @@ export const dicts: Record<Locale, Dict> = {
     "status.COMPLETED": "已完成",
     "status.CANCELLED": "已取消",
 
-    "footer.brand": "TripGo",
+    "footer.brand": "XioohTravel",
     "footer.desc": "机场接送机预订平台。支持多车型选择、价格透明、中文客服。",
     "footer.contact": "联系我们",
     "footer.rules": "规则说明",
@@ -408,7 +408,7 @@ export const dicts: Record<Locale, Dict> = {
     "dev.unlock": "输入你的 ADMIN_TOKEN 解锁后台入口（仅开发者可见）。"
   },
   en: {
-    "brand.name": "TripGo",
+    "brand.name": "XioohTravel",
     "brand.tagline": "Japan Airport Transfers",
     "nav.home": "Home",
     "nav.contact": "Contact",
@@ -426,7 +426,7 @@ export const dicts: Record<Locale, Dict> = {
     "currency.usd": "USD",
 
     "home.badge": "Fixed price · Support · Multiple vehicle options",
-    "home.title": "TripGo Airport Transfer Booking",
+    "home.title": "XioohTravel Airport Transfer Booking",
     "home.subtitle":
       "Book like Ctrip / Klook: enter flight info, pickup & drop-off, passengers & luggage, then choose a vehicle.",
     "home.chip.urgent": "Urgent Support: Book within 24h",
@@ -756,7 +756,7 @@ export const dicts: Record<Locale, Dict> = {
     "status.COMPLETED": "Completed",
     "status.CANCELLED": "Cancelled",
 
-    "footer.brand": "TripGo",
+    "footer.brand": "XioohTravel",
     "footer.desc":
       "Japan airport transfer booking platform with multiple vehicle options, transparent pricing, and support.",
     "footer.contact": "Contact",

@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 
 export type Currency = "JPY" | "CNY" | "USD";
 
-export const CURRENCY_COOKIE = "TripGo_currency";
+export const CURRENCY_COOKIE = "XioohTravel_currency";
 
 export function normalizeCurrency(input: string | null | undefined): Currency {
   const v = (input ?? "").toUpperCase();
@@ -47,5 +47,4 @@ export function formatMoneyFromJpy(amountJpy: number, currency: Currency, locale
     minimumFractionDigits: digits
   }).format(value);
 }
-
 
