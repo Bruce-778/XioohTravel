@@ -1,4 +1,4 @@
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { dicts, type Locale } from "./dicts";
 
 export const LOCALE_COOKIE = "XioohTravel_locale";
@@ -13,17 +13,17 @@ export async function getLocale(): Promise<Locale> {
   const c = await cookies();
   const fromCookie = c.get(LOCALE_COOKIE)?.value;
   if (fromCookie) return normalizeLocale(fromCookie);
-  const h = await headers();
-  const accept = h.get("accept-language");
-  return normalizeLocale(accept ?? "zh");
+  return "en";
 }
 
 export async function getT() {
   const locale = await getLocale();
-  const d = dicts[locale] ?? dicts.zh;
+  const d = dicts[locale] ?? dicts.en;
   function t(key: string) {
-    return d[key] ?? dicts.zh[key] ?? key;
+    if (locale === "en") {
+      return d[key] ?? key;
+    }
+    return d[key] ?? dicts.en[key] ?? key;
   }
   return { locale, t };
 }
-

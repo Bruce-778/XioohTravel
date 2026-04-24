@@ -644,12 +644,14 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                 className="flex-[1.5] min-w-[140px] px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
               />
               <input
                 type="time"
                 className="flex-1 min-w-[100px] pl-3 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
+                lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
               />
             </div>
           </div>
@@ -664,12 +666,14 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 min={startDate}
+                lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
               />
               <input
                 type="time"
                 className="flex-1 min-w-[100px] pl-3 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
+                lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
               />
             </div>
           </div>

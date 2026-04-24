@@ -7,7 +7,7 @@ export async function POST(req: Request) {
   try {
     const { email } = await req.json();
     if (!email || !email.includes("@")) {
-      return NextResponse.json({ error: "无效的邮箱地址 / Invalid email" }, { status: 400 });
+      return NextResponse.json({ error: t("auth.invalidEmail") }, { status: 400 });
     }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ 
       ok: true, 
-      message: "Code sent",
+      message: t("auth.codeSent"),
       // MVP: In development mode, return the code for testing convenience
       ...(process.env.NODE_ENV === "development" ? { _dev_code: code } : {})
     });

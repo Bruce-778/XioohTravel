@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     );
 
     if (rows.length === 0) {
-      return NextResponse.json({ error: "验证码错误或已过期 / Invalid code" }, { status: 400 });
+      return NextResponse.json({ error: t("api.invalidCode") }, { status: 400 });
     }
 
     // Delete the code after use

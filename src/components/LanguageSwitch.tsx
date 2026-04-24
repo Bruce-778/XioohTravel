@@ -35,7 +35,7 @@ export function LanguageSwitch({
           onChange={(e) =>
             start(async () => {
               await setLocale(e.target.value as "zh" | "en");
-              window.location.reload();
+              router.refresh();
             })
           }
           className="appearance-none pl-3 pr-8 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-colors cursor-pointer disabled:opacity-50"
@@ -56,5 +56,4 @@ export function LanguageSwitch({
     </div>
   );
 }
-
 

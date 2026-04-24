@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { LanguageSwitch } from "@/components/LanguageSwitch";
 import { CurrencySwitch } from "@/components/CurrencySwitch";
@@ -50,18 +51,19 @@ export function Navbar({
         <div className="flex items-center justify-between h-16">
           <Link 
             href="/" 
-            className="flex items-center gap-3 group transition-transform duration-200 hover:scale-105"
+            className="flex items-center group transition-transform duration-200 hover:scale-105"
           >
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-brand-500 to-brand-700 rounded-xl blur opacity-75 group-hover:opacity-100 transition-opacity"></div>
-              <div className="relative h-10 w-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-700 text-white grid place-items-center font-bold text-lg shadow-lg">
-                TG
-              </div>
-            </div>
-            <div className="leading-tight hidden sm:block">
-              <div className="font-bold text-slate-900 text-lg">{labels.brandName}</div>
-              <div className="text-xs text-slate-500 font-medium">{labels.brandTagline}</div>
-            </div>
+            <Image
+              src="/brand/xioohtravel-logo.svg"
+              alt={`${labels.brandName} ${labels.brandTagline}`}
+              width={280}
+              height={92}
+              priority
+              className="h-11 w-auto sm:h-12"
+            />
+            <span className="sr-only">
+              {labels.brandName} {labels.brandTagline}
+            </span>
           </Link>
 
           <nav className="flex items-center gap-2 sm:gap-4 text-sm">
