@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LocationSelector } from "./LocationSelector";
-import { useSession } from "@/hooks/useSession";
 
 type TripType = "PICKUP" | "DROPOFF" | "POINT_TO_POINT";
 type Labels = {
@@ -33,22 +32,48 @@ type Labels = {
   locationNoResults?: string;
   locationGoogleConfigError?: string;
   locationGooglePowered?: string;
+  selectedTime?: string;
 };
 
 function cn(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
 
+function formatDateTimeLocalValue(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function formatDateTimePreview(value: string, locale: string) {
+  const [datePart, timePart] = value.split("T");
+  if (!datePart || !timePart) return value;
+
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+
+  if ([year, month, day, hour, minute].some((part) => Number.isNaN(part))) {
+    return value;
+  }
+
+  const formatted = new Intl.DateTimeFormat(locale.startsWith("zh") ? "zh-CN" : "en-US", {
+    year: "numeric",
+    month: locale.startsWith("zh") ? "numeric" : "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(year, month - 1, day, hour, minute));
+
+  return `${formatted} JST`;
+}
+
 export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?: string }) {
   const router = useRouter();
-  const { user } = useSession();
   const [tripType, setTripType] = useState<TripType>("PICKUP");
   const [fromArea, setFromArea] = useState("");
   const [toArea, setToArea] = useState("");
   const [pickupTime, setPickupTime] = useState("");
 
-  // 默认值逻辑
-  useMemo(() => {
+  useEffect(() => {
     if (!fromArea && !toArea) {
       if (tripType === "PICKUP") {
         setFromArea("NRT T1");
@@ -60,13 +85,12 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
     }
   }, [tripType, fromArea, toArea]);
 
-  // 设置默认时间为明天 10:00
-  useMemo(() => {
+  useEffect(() => {
     if (!pickupTime) {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(10, 0, 0, 0);
-      setPickupTime(tomorrow.toISOString().slice(0, 16));
+      setPickupTime(formatDateTimeLocalValue(tomorrow));
     }
   }, []);
   const [passengers, setPassengers] = useState(2);
@@ -100,10 +124,6 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!user) {
-          router.push(`/login`);
-          return;
-        }
         router.push(`/vehicles?${query}`);
       }}
     >
@@ -171,6 +191,8 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
           className="input-field"
           value={pickupTime}
           onChange={(e) => setPickupTime(e.target.value)}
+          lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
+          aria-label={labels?.pickupTime ?? "Pickup Time"}
         />
         {labels?.timezoneHint ? (
           <div className="mt-1.5 text-xs text-slate-500 flex items-center gap-1">
@@ -178,6 +200,11 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
             </svg>
             {labels.timezoneHint}
+          </div>
+        ) : null}
+        {pickupTime ? (
+          <div className="mt-1.5 text-xs text-slate-500">
+            {(labels?.selectedTime ?? "Selected time")}: {formatDateTimePreview(pickupTime, locale)}
           </div>
         ) : null}
       </label>
@@ -256,5 +283,3 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
     </form>
   );
 }
-
-

@@ -21,11 +21,24 @@ export async function POST(req: Request) {
     if (bookings.length === 0) return NextResponse.json({ error: t("api.orderNotFound") }, { status: 404 });
     const booking = bookings[0];
 
-    const nextManual = manualAdjustmentJpy ?? booking.pricing_manual_adjustment_jpy;
+    const base = Number(booking.pricing_base_jpy ?? 0);
+    const night = Number(booking.pricing_night_jpy ?? 0);
+    const urgent = Number(booking.pricing_urgent_jpy ?? 0);
+    const childSeat = Number(booking.pricing_child_seat_jpy ?? 0);
+    const currentManual = Number(booking.pricing_manual_adjustment_jpy ?? 0);
+
+    const nextManual = manualAdjustmentJpy ?? currentManual;
     const nextStatus = status ?? booking.status;
 
-    const nextTotal =
-      booking.pricing_base_jpy + booking.pricing_night_jpy + booking.pricing_urgent_jpy + nextManual;
+    if (
+      (booking.status !== "PENDING_PAYMENT" || nextStatus !== "PENDING_PAYMENT") &&
+      manualAdjustmentJpy !== undefined &&
+      nextManual !== currentManual
+    ) {
+      return NextResponse.json({ error: t("api.paidBookingLocked") }, { status: 400 });
+    }
+
+    const nextTotal = base + night + urgent + childSeat + nextManual;
 
     await db.query(
       `UPDATE bookings SET status = $1, pricing_manual_adjustment_jpy = $2, pricing_total_jpy = $3, pricing_note = $4, updated_at = NOW()

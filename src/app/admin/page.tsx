@@ -115,12 +115,12 @@ export default async function AdminPage() {
             verified: t("admin.verified"),
             pricingRuleNotFound: t("admin.pricingRuleNotFound"),
             vehicleTypeNotFound: t("admin.vehicleTypeNotFound"),
-            selectVehicle: t("admin.selectVehicle")
+            selectVehicle: t("admin.selectVehicle"),
+            pricingLockedHint: t("admin.pricingLockedHint"),
           }}
         />
       </div>
     </div>
   );
 }
-
 

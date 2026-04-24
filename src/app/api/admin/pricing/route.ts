@@ -9,6 +9,42 @@ function generateId() {
   return Math.random().toString(36).substring(2, 15);
 }
 
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, max-age=0",
+};
+
+async function getRuleById(id: string) {
+  const { rows } = await db.query(
+    `SELECT r.*, v.name as "vehicleName", v.seats as "vehicleSeats"
+     FROM pricing_rules r
+     JOIN vehicle_types v ON r.vehicle_type_id = v.id
+     WHERE r.id = $1
+     LIMIT 1`,
+    [id]
+  );
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const rule = rows[0];
+  return {
+    id: rule.id,
+    fromArea: rule.from_area,
+    toArea: rule.to_area,
+    tripType: rule.trip_type,
+    basePriceJpy: rule.base_price_jpy,
+    nightFeeJpy: rule.night_fee_jpy,
+    urgentFeeJpy: rule.urgent_fee_jpy,
+    vehicleTypeId: rule.vehicle_type_id,
+    vehicleType: {
+      id: rule.vehicle_type_id,
+      name: rule.vehicleName,
+      seats: rule.vehicleSeats,
+    },
+  };
+}
+
 // GET: 获取所有价格规则
 export async function GET(req: Request) {
   const { t } = await getT();
@@ -68,7 +104,7 @@ export async function GET(req: Request) {
       }
     }));
 
-    return NextResponse.json({ rules });
+    return NextResponse.json({ rules }, { headers: NO_STORE_HEADERS });
   } catch (e: any) {
     console.error(e);
     return NextResponse.json({ error: e?.message ?? t("api.serverError") }, { status: 500 });
@@ -113,7 +149,8 @@ export async function POST(req: Request) {
       [id, fromArea, toArea, tripType, vehicleTypeId, basePriceJpy, nightFeeJpy ?? 0, urgentFeeJpy ?? 0]
     );
 
-    return NextResponse.json({ ok: true });
+    const rule = await getRuleById(id);
+    return NextResponse.json({ ok: true, rule }, { headers: NO_STORE_HEADERS });
   } catch (e: any) {
     console.error(e);
     return NextResponse.json({ error: e?.message ?? t("api.serverError") }, { status: 500 });
@@ -144,8 +181,8 @@ export async function PUT(req: Request) {
     }
 
     // 如果路线或车型改变，检查是否会产生冲突
-    const rule = existing[0];
-    if (fromArea !== rule.from_area || toArea !== rule.to_area || tripType !== rule.trip_type || vehicleTypeId !== rule.vehicle_type_id) {
+    const existingRule = existing[0];
+    if (fromArea !== existingRule.from_area || toArea !== existingRule.to_area || tripType !== existingRule.trip_type || vehicleTypeId !== existingRule.vehicle_type_id) {
       const { rows: conflict } = await db.query(
         "SELECT id FROM pricing_rules WHERE from_area = $1 AND to_area = $2 AND trip_type = $3 AND vehicle_type_id = $4 AND id != $5",
         [fromArea, toArea, tripType, vehicleTypeId, id]
@@ -162,7 +199,8 @@ export async function PUT(req: Request) {
       [fromArea, toArea, tripType, vehicleTypeId, basePriceJpy, nightFeeJpy ?? 0, urgentFeeJpy ?? 0, id]
     );
 
-    return NextResponse.json({ ok: true });
+    const updatedRule = await getRuleById(id);
+    return NextResponse.json({ ok: true, rule: updatedRule }, { headers: NO_STORE_HEADERS });
   } catch (e: any) {
     console.error(e);
     return NextResponse.json({ error: e?.message ?? t("api.serverError") }, { status: 500 });
@@ -188,7 +226,7 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: t("api.pricingRuleNotFound") }, { status: 404 });
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, id }, { headers: NO_STORE_HEADERS });
   } catch (e: any) {
     console.error(e);
     return NextResponse.json({ error: e?.message ?? t("api.serverError") }, { status: 500 });

@@ -3,9 +3,16 @@ import { getT, getLocale } from "@/lib/i18n";
 import { TravelShowcase } from "@/components/TravelShowcase";
 import { VEHICLE_NAMES } from "@/lib/locationData";
 
-export default async function OrdersPage() {
+export default async function OrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { t } = await getT();
   const locale = await getLocale();
+  const params = await searchParams;
+  const initialEmail = typeof params.email === "string" ? params.email : "";
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">
       <div className="flex items-end justify-between">
@@ -18,6 +25,7 @@ export default async function OrdersPage() {
       <div className="mt-6">
         <OrdersClient
           locale={locale}
+          initialEmail={initialEmail}
           labels={{
             queryTitle: t("orders.queryTitle"),
             querySubtitle: t("orders.querySubtitle"),
@@ -65,11 +73,14 @@ export default async function OrdersPage() {
             loginDesc: t("orders.loginDesc"),
             loginButton: t("orders.loginButton"),
             cancelReasonPlaceholder: t("orders.cancelReasonPlaceholder"),
+            retryPayment: t("orders.retryPayment"),
+            retryingPayment: t("orders.retryingPayment"),
+            emailRequired: t("orders.emailRequired"),
+            guestLookupHint: t("orders.guestLookupHint"),
+            pendingPaymentHint: t("orders.pendingPaymentHint"),
           }} 
         />
       </div>
     </div>
   );
 }
-
-

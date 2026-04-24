@@ -1,114 +1,121 @@
-import { Pool } from 'pg';
-import dotenv from 'dotenv';
+import { readFile } from "node:fs/promises";
+import dotenv from "dotenv";
+import { Pool, PoolClient } from "pg";
+
 dotenv.config();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
 });
+
+const TABLE_NAMES = [
+  "orders",
+  "vehicle_types",
+  "pricing_rules",
+  "bookings",
+  "users",
+  "user_emails",
+  "verification_codes",
+] as const;
+
+type TableName = (typeof TABLE_NAMES)[number];
+
+function quoteIdent(identifier: TableName) {
+  return `"${identifier}"`;
+}
+
+async function tableExists(client: PoolClient, tableName: TableName) {
+  const { rows } = await client.query<{ exists: boolean }>(
+    "SELECT to_regclass($1) IS NOT NULL AS exists",
+    [`public.${tableName}`]
+  );
+  return rows[0]?.exists ?? false;
+}
+
+async function getTableCount(client: PoolClient, tableName: TableName) {
+  if (!(await tableExists(client, tableName))) {
+    return null;
+  }
+
+  const { rows } = await client.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM ${quoteIdent(tableName)}`
+  );
+
+  return Number(rows[0]?.count ?? 0);
+}
+
+async function snapshotCounts(client: PoolClient) {
+  const entries = await Promise.all(
+    TABLE_NAMES.map(async (tableName) => [tableName, await getTableCount(client, tableName)] as const)
+  );
+
+  return Object.fromEntries(entries) as Record<TableName, number | null>;
+}
+
+function printCounts(title: string, counts: Record<TableName, number | null>) {
+  console.log(title);
+  for (const tableName of TABLE_NAMES) {
+    const value = counts[tableName];
+    console.log(`  - ${tableName}: ${value === null ? "missing" : value}`);
+  }
+}
+
+async function getPricingRuleDuplicateGroups(client: PoolClient) {
+  if (!(await tableExists(client, "pricing_rules"))) {
+    return 0;
+  }
+
+  const { rows } = await client.query<{ count: string }>(`
+    SELECT COUNT(*)::text AS count
+    FROM (
+      SELECT from_area, to_area, trip_type, vehicle_type_id
+      FROM pricing_rules
+      GROUP BY from_area, to_area, trip_type, vehicle_type_id
+      HAVING COUNT(*) > 1
+    ) duplicates
+  `);
+
+  return Number(rows[0]?.count ?? 0);
+}
 
 async function init() {
   const client = await pool.connect();
+
   try {
-    console.log('Starting database initialization...');
+    const sqlFile = new URL("./sql/supabase-safe-init.sql", import.meta.url);
+    const migrationSql = await readFile(sqlFile, "utf8");
 
-    // Drop existing tables if needed (optional, but for a clean start)
-    // await client.query('DROP TABLE IF EXISTS bookings, pricing_rules, vehicle_types, verification_codes, user_emails, users CASCADE');
+    console.log("Starting safe PostgreSQL/Supabase initialization...");
 
-    // Create Tables
-    await client.query(`
-      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    const beforeCounts = await snapshotCounts(client);
+    printCounts("Table counts before migration:", beforeCounts);
 
-      CREATE TABLE IF NOT EXISTS vehicle_types (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        seats INTEGER NOT NULL,
-        luggage_small INTEGER NOT NULL,
-        luggage_medium INTEGER NOT NULL,
-        luggage_large INTEGER NOT NULL,
-        is_luxury BOOLEAN DEFAULT FALSE,
-        is_bus BOOLEAN DEFAULT FALSE,
-        description TEXT,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    await client.query("BEGIN");
+    await client.query(migrationSql);
+    await client.query("COMMIT");
+
+    const afterCounts = await snapshotCounts(client);
+    printCounts("Table counts after migration:", afterCounts);
+
+    const duplicateGroups = await getPricingRuleDuplicateGroups(client);
+    if (duplicateGroups > 0) {
+      console.log(
+        `Pricing rule duplicates detected in ${duplicateGroups} route group(s). Unique constraint was intentionally skipped to preserve existing data.`
       );
+    } else {
+      console.log("No duplicate pricing rule groups detected.");
+    }
 
-      CREATE TABLE IF NOT EXISTS pricing_rules (
-        id TEXT PRIMARY KEY,
-        from_area TEXT NOT NULL,
-        to_area TEXT NOT NULL,
-        trip_type TEXT NOT NULL,
-        base_price_jpy INTEGER NOT NULL,
-        night_fee_jpy INTEGER DEFAULT 0,
-        urgent_fee_jpy INTEGER DEFAULT 0,
-        vehicle_type_id TEXT REFERENCES vehicle_types(id),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
+    if (beforeCounts.orders !== null) {
+      console.log("Legacy orders table detected and preserved as-is.");
+    }
 
-      CREATE INDEX IF NOT EXISTS idx_pricing_rules_lookup ON pricing_rules(from_area, to_area, trip_type, vehicle_type_id);
-
-      CREATE TABLE IF NOT EXISTS bookings (
-        id TEXT PRIMARY KEY,
-        status TEXT DEFAULT 'PENDING_PAYMENT',
-        is_urgent BOOLEAN DEFAULT FALSE,
-        currency TEXT DEFAULT 'JPY',
-        trip_type TEXT NOT NULL,
-        pickup_time TIMESTAMP WITH TIME ZONE NOT NULL,
-        pickup_location TEXT NOT NULL,
-        dropoff_location TEXT NOT NULL,
-        flight_number TEXT,
-        flight_date TIMESTAMP WITH TIME ZONE,
-        flight_note TEXT,
-        passengers INTEGER NOT NULL,
-        child_seats INTEGER DEFAULT 0,
-        luggage_small INTEGER DEFAULT 0,
-        luggage_medium INTEGER DEFAULT 0,
-        luggage_large INTEGER DEFAULT 0,
-        contact_name TEXT NOT NULL,
-        contact_phone TEXT NOT NULL,
-        contact_email TEXT NOT NULL,
-        contact_note TEXT,
-        pricing_base_jpy INTEGER NOT NULL,
-        pricing_night_jpy INTEGER DEFAULT 0,
-        pricing_urgent_jpy INTEGER DEFAULT 0,
-        pricing_child_seat_jpy INTEGER DEFAULT 0,
-        pricing_manual_adjustment_jpy INTEGER DEFAULT 0,
-        pricing_total_jpy INTEGER NOT NULL,
-        pricing_note TEXT,
-        cancel_reason TEXT,
-        cancelled_at TIMESTAMP WITH TIME ZONE,
-        vehicle_type_id TEXT REFERENCES vehicle_types(id),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        role TEXT DEFAULT 'USER',
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS user_emails (
-        id SERIAL PRIMARY KEY,
-        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-        email TEXT UNIQUE NOT NULL,
-        verified_at TIMESTAMP WITH TIME ZONE,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS verification_codes (
-        email TEXT PRIMARY KEY,
-        code TEXT NOT NULL,
-        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    console.log('Database initialization completed successfully.');
+    console.log("Safe database initialization completed successfully.");
   } catch (error) {
-    console.error('Error initializing database:', error);
+    await client.query("ROLLBACK").catch(() => undefined);
+    console.error("Error initializing database safely:", error);
+    process.exitCode = 1;
   } finally {
     client.release();
     await pool.end();

@@ -3,8 +3,6 @@ import type { Metadata } from "next";
 import { Navbar } from "@/components/Navbar";
 import { MobileNav } from "@/components/MobileNav";
 import { getT } from "@/lib/i18n";
-import { cookies } from "next/headers";
-import { isAdminVerified } from "@/lib/auth";
 import { getCurrency } from "@/lib/currency";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -17,7 +15,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { locale, t } = await getT();
-  const showAdmin = await isAdminVerified();
   const currency = await getCurrency();
   return (
     <html lang={locale === "en" ? "en" : "zh-CN"}>
@@ -42,7 +39,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               login: t("nav.login"),
               logout: t("nav.logout")
             }}
-            showAdmin={showAdmin}
             currency={currency}
           />
           <main className="flex-1 pb-16 md:pb-0">{children}</main>
@@ -58,5 +54,4 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     </html>
   );
 }
-
 

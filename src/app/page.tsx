@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SearchForm } from "@/components/SearchForm";
 import { AuthLink } from "@/components/AuthLink";
+import { HomeTrustSection } from "@/components/HomeTrustSection";
 import { getT } from "@/lib/i18n";
 
 export default async function HomePage() {
@@ -113,6 +114,7 @@ export default async function HomePage() {
                     placeholderAirport: t("search.placeholderAirport"),
                     placeholderLocation: t("search.placeholderLocation"),
                     locationTip: t("search.locationTip"),
+                    selectedTime: t("search.selectedTime"),
                     locationSearching: t("location.searching"),
                     locationNoResults: t("location.noResults"),
                     locationGoogleConfigError: t("location.googleConfigError"),
@@ -124,6 +126,8 @@ export default async function HomePage() {
           </div>
         </div>
       </div>
+
+      <HomeTrustSection />
     </div>
   );
 }

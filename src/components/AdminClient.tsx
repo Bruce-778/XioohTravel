@@ -16,6 +16,19 @@ function getCurrencyFromCookie(): Currency {
   return "JPY";
 }
 
+function sortPricingRules(rules: PricingRule[]) {
+  return [...rules].sort((a, b) => {
+    const routeCompare = a.fromArea.localeCompare(b.fromArea) || a.toArea.localeCompare(b.toArea);
+    if (routeCompare !== 0) return routeCompare;
+    const tripCompare = a.tripType.localeCompare(b.tripType);
+    if (tripCompare !== 0) return tripCompare;
+    const aSeats = a.vehicleType.seats ?? 0;
+    const bSeats = b.vehicleType.seats ?? 0;
+    if (aSeats !== bSeats) return aSeats - bSeats;
+    return a.vehicleType.name.localeCompare(b.vehicleType.name);
+  });
+}
+
 type AdminRow = {
   id: string;
   createdAt: string;
@@ -41,6 +54,7 @@ type PricingRule = {
   vehicleType: {
     id: string;
     name: string;
+    seats?: number;
   };
 };
 
@@ -137,17 +151,20 @@ type Labels = {
   verified: string;
   itemsPerPageSuffix: string;
   selectVehicle: string;
+  pricingLockedHint: string;
 };
 
 export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; locale?: string }) {
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingSaving, setPricingSaving] = useState(false);
+  const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<AdminRow[]>([]);
   const [currency, setCurrency] = useState<Currency>("JPY");
   const [activeTab, setActiveTab] = useState<"orders" | "pricing">("orders");
-  const isZh = locale.startsWith("zh");
   
   // Order pagination
   const [orderCurrentPage, setOrderCurrentPage] = useState(1);
@@ -192,6 +209,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedRules = pricingRules.slice(startIndex, endIndex);
+  const isPricingLocked = editingRow ? editingRow.status !== "PENDING_PAYMENT" : false;
   const [ruleForm, setRuleForm] = useState({
     fromArea: "",
     toArea: "",
@@ -229,11 +247,17 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     };
   }, []);
 
+  useEffect(() => {
+    if (currentPage > Math.max(totalPages, 1)) {
+      setCurrentPage(Math.max(totalPages, 1));
+    }
+  }, [currentPage, totalPages]);
+
   // Admin secret verification
   useEffect(() => {
     const checkAdmin = async () => {
       try {
-        const res = await fetch("/api/admin/verify-secret");
+        const res = await fetch("/api/admin/verify-secret", { cache: "no-store" });
         if (res.ok) {
           // If already verified (cookie exists), just set a dummy token to enable UI
           setToken("verified");
@@ -348,7 +372,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
 
   async function loadVehicles() {
     try {
-      const res = await fetch("/api/admin/vehicles");
+      const res = await fetch("/api/admin/vehicles", { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? labels.loadFailed);
       setVehicleTypes(data.vehicles ?? []);
@@ -358,18 +382,17 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   }
 
   async function loadPricingRules() {
-    setLoading(true);
+    setPricingLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/pricing");
+      const res = await fetch("/api/admin/pricing", { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? labels.loadFailed);
-      setPricingRules(data.rules ?? []);
-      setCurrentPage(1); // Reset to first page when loading new data
+      setPricingRules(sortPricingRules(data.rules ?? []));
     } catch (e: any) {
       setError(e?.message ?? labels.loadFailed);
     } finally {
-      setLoading(false);
+      setPricingLoading(false);
     }
   }
 
@@ -389,52 +412,72 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   }, [editingRule]);
 
   async function savePricingRule() {
-    setLoading(true);
+    setPricingSaving(true);
     setError(null);
     try {
-      const url = editingRuleId ? "/api/admin/pricing" : "/api/admin/pricing";
       const method = editingRuleId ? "PUT" : "POST";
       const body = editingRuleId ? { id: editingRuleId, ...ruleForm } : ruleForm;
 
-      const res = await fetch(url, {
+      const res = await fetch("/api/admin/pricing", {
         method,
         headers: { "content-type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify(body)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? labels.saveFailed);
+
+      if (data?.rule) {
+        setPricingRules((prev) => {
+          const next = editingRuleId
+            ? prev.map((rule) => (rule.id === data.rule.id ? data.rule : rule))
+            : [data.rule, ...prev];
+          return sortPricingRules(next);
+        });
+      } else {
+        await loadPricingRules();
+      }
+
       setEditingRuleId(null);
       setShowRuleForm(false);
-      await loadPricingRules();
+      setRuleForm({
+        fromArea: "",
+        toArea: "",
+        tripType: "PICKUP",
+        vehicleTypeId: "",
+        basePriceJpy: 0,
+        nightFeeJpy: 0,
+        urgentFeeJpy: 0
+      });
     } catch (e: any) {
       setError(e?.message ?? labels.saveFailed);
     } finally {
-      setLoading(false);
+      setPricingSaving(false);
     }
   }
 
   async function deletePricingRule(id: string) {
     if (!confirm(labels.deleteConfirmText)) return;
-    setLoading(true);
+    setDeletingRuleId(id);
     setError(null);
     try {
       const res = await fetch(`/api/admin/pricing?id=${id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        cache: "no-store",
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? labels.deleteFailed);
-      await loadPricingRules();
+      setPricingRules((prev) => prev.filter((rule) => rule.id !== id));
     } catch (e: any) {
       setError(e?.message ?? labels.deleteFailed);
     } finally {
-      setLoading(false);
+      setDeletingRuleId(null);
     }
   }
 
   useEffect(() => {
     if (token && activeTab === "pricing") {
-      loadVehicles();
-      loadPricingRules();
+      void Promise.all([loadVehicles(), loadPricingRules()]);
     }
   }, [token, activeTab]);
 
@@ -472,14 +515,15 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
       const res = await fetch("/api/admin/verify-secret", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({ secret: token })
       });
       if (res.ok) {
         setToken("verified");
         if (activeTab === "orders") {
-          load();
+          void load();
         } else {
-          loadPricingRules();
+          void Promise.all([loadVehicles(), loadPricingRules()]);
         }
       } else {
         const data = await res.json();
@@ -887,12 +931,15 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                   <div className="text-slate-700 mb-2 font-medium">{labels.manualAdjustment}</div>
                   <input
                     type="number"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all disabled:bg-slate-100 disabled:text-slate-400"
                     value={manualAdjustmentJpy}
                     onChange={(e) => setManualAdjustmentJpy(Number(e.target.value))}
                     placeholder="0"
+                    disabled={isPricingLocked}
                   />
-                  <div className="text-xs text-slate-500 mt-1.5">{labels.adjustmentHint}</div>
+                  <div className="text-xs text-slate-500 mt-1.5">
+                    {isPricingLocked ? labels.pricingLockedHint : labels.adjustmentHint}
+                  </div>
                 </label>
 
                 <label className="text-sm block md:col-span-2">
@@ -910,18 +957,18 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
               <div className="mt-6 flex gap-3 justify-end pt-4 border-t border-slate-200">
                 <button
                   className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 disabled:opacity-60 text-sm font-medium transition-colors"
-                  disabled={loading}
-                  onClick={() => setEditingId(null)}
-                >
-                  {labels.cancel}
-                </button>
+                disabled={loading}
+                onClick={() => setEditingId(null)}
+              >
+                {labels.cancel}
+              </button>
                 <button
                   className="px-5 py-2.5 rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60 text-sm font-medium transition-colors"
-                  disabled={loading}
-                  onClick={save}
-                >
-                  {loading ? labels.saving : labels.save}
-                </button>
+                disabled={loading}
+                onClick={save}
+              >
+                {loading ? labels.saving : labels.save}
+              </button>
               </div>
             </div>
           </div>
@@ -949,7 +996,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                     urgentFeeJpy: 0
                   });
                 }}
-                disabled={loading || !token}
+                disabled={pricingLoading || pricingSaving || !token}
                 className="px-4 py-2 rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60 text-sm font-medium"
               >
                 {labels.addRule}
@@ -974,7 +1021,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                   {paginatedRules.length === 0 ? (
                     <tr>
                       <td className="py-4 text-slate-500" colSpan={8}>
-                        {labels.noRules}
+                        {pricingLoading ? labels.loading : labels.noRules}
                       </td>
                     </tr>
                   ) : (
@@ -997,15 +1044,16 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                                 setEditingRuleId(r.id);
                                 setShowRuleForm(true);
                               }}
+                              disabled={pricingSaving || deletingRuleId !== null}
                             >
                               {labels.edit}
                             </button>
                             <button
                               className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 text-sm"
                               onClick={() => deletePricingRule(r.id)}
-                              disabled={loading}
+                              disabled={pricingSaving || deletingRuleId !== null}
                             >
-                              {labels.delete}
+                              {deletingRuleId === r.id ? labels.deleting : labels.delete}
                             </button>
                           </div>
                         </td>
@@ -1174,7 +1222,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                   <div className="mt-6 flex gap-2 justify-end">
                     <button
                       className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 disabled:opacity-60"
-                      disabled={loading}
+                      disabled={pricingSaving}
                       onClick={() => {
                         setEditingRuleId(null);
                         setShowRuleForm(false);
@@ -1193,10 +1241,10 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                     </button>
                     <button
                       className="px-4 py-2 rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
-                      disabled={loading}
+                      disabled={pricingSaving}
                       onClick={savePricingRule}
                     >
-                      {loading
+                      {pricingSaving
                         ? editingRuleId
                           ? labels.updating
                           : labels.creating
@@ -1214,5 +1262,3 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     </div>
   );
 }
-
-

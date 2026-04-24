@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { LocationSelector } from "./LocationSelector";
 
 type Preset = {
@@ -40,6 +39,14 @@ type Labels = {
   placeholderLocation: string;
   locationTip: string;
   placeholderEmail?: string;
+  flightNumberRequired: string;
+  pickupLocationRequired: string;
+  dropoffLocationRequired: string;
+  contactNameRequired: string;
+  contactPhoneRequired: string;
+  contactPhoneInvalid: string;
+  contactEmailRequired: string;
+  contactEmailInvalid: string;
 };
 
 function Field({
@@ -58,7 +65,6 @@ function Field({
 }
 
 export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset; labels: Labels; locale?: string }) {
-  const router = useRouter();
   const [pickupLocation, setPickupLocation] = useState(preset.tripType === "PICKUP" ? `${preset.fromArea} ${labels.airportTag}` : preset.fromArea);
   const [dropoffLocation, setDropoffLocation] = useState(preset.tripType === "DROPOFF" ? `${preset.toArea} ${labels.airportTag}` : preset.toArea);
   const [flightNumber, setFlightNumber] = useState("");
@@ -69,6 +75,12 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
   const [contactNote, setContactNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function clearError() {
+    if (error) {
+      setError(null);
+    }
+  }
 
   const payload = useMemo(
     () => ({
@@ -92,18 +104,52 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
       contactName,
       contactPhone,
       contactEmail,
-      contactNote,
-      locale
+      contactNote
     ]
   );
+
+  function validatePayload() {
+    if (preset.tripType === "PICKUP" && !flightNumber.trim()) {
+      return labels.flightNumberRequired;
+    }
+    if (pickupLocation.trim().length < 2) {
+      return labels.pickupLocationRequired;
+    }
+    if (dropoffLocation.trim().length < 2) {
+      return labels.dropoffLocationRequired;
+    }
+    if (!contactName.trim()) {
+      return labels.contactNameRequired;
+    }
+    if (!contactPhone.trim()) {
+      return labels.contactPhoneRequired;
+    }
+    if (contactPhone.trim().length < 5) {
+      return labels.contactPhoneInvalid;
+    }
+    if (!contactEmail.trim()) {
+      return labels.contactEmailRequired;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail.trim())) {
+      return labels.contactEmailInvalid;
+    }
+    return null;
+  }
 
   return (
     <form
       className="space-y-4"
+      noValidate
       onSubmit={async (e) => {
         e.preventDefault();
-        setLoading(true);
         setError(null);
+        const validationError = validatePayload();
+        if (validationError) {
+          setError(validationError);
+          return;
+        }
+
+        setLoading(true);
         try {
           const res = await fetch("/api/bookings", {
             method: "POST",
@@ -112,7 +158,10 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
           });
           const data = await res.json();
           if (!res.ok) throw new Error(data?.error ?? labels.orderFailed);
-          router.push(`/success?bookingId=${encodeURIComponent(data.bookingId)}`);
+          if (!data?.checkoutUrl) {
+            throw new Error(labels.orderFailed);
+          }
+          window.location.assign(data.checkoutUrl);
         } catch (err: any) {
           setError(err?.message ?? labels.orderFailed);
         } finally {
@@ -125,7 +174,10 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
           <input
             className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
             value={flightNumber}
-            onChange={(e) => setFlightNumber(e.target.value)}
+            onChange={(e) => {
+              clearError();
+              setFlightNumber(e.target.value);
+            }}
             placeholder={labels.placeholderFlight}
             required={preset.tripType === "PICKUP"}
           />
@@ -134,7 +186,10 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
           <input
             className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
             value={flightNote}
-            onChange={(e) => setFlightNote(e.target.value)}
+            onChange={(e) => {
+              clearError();
+              setFlightNote(e.target.value);
+            }}
             placeholder={labels.placeholderFlightNote}
           />
         </Field>
@@ -143,7 +198,10 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
       <div className="grid md:grid-cols-2 gap-3">
         <LocationSelector
           value={pickupLocation}
-          onChange={setPickupLocation}
+          onChange={(value) => {
+            clearError();
+            setPickupLocation(value);
+          }}
           label={labels.pickupLocation}
           placeholder={preset.tripType === "PICKUP" ? labels.placeholderAirport : labels.placeholderLocation}
           isAirport={preset.tripType === "PICKUP"}
@@ -152,7 +210,10 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
         />
         <LocationSelector
           value={dropoffLocation}
-          onChange={setDropoffLocation}
+          onChange={(value) => {
+            clearError();
+            setDropoffLocation(value);
+          }}
           label={labels.dropoffLocation}
           placeholder={preset.tripType === "DROPOFF" ? labels.placeholderAirport : labels.placeholderLocation}
           isAirport={preset.tripType === "DROPOFF"}
@@ -166,16 +227,23 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
           <input
             className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
             value={contactName}
-            onChange={(e) => setContactName(e.target.value)}
+            onChange={(e) => {
+              clearError();
+              setContactName(e.target.value);
+            }}
             placeholder={labels.placeholderName}
             required
           />
         </Field>
         <Field label={labels.contactPhone}>
           <input
+            type="tel"
             className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
             value={contactPhone}
-            onChange={(e) => setContactPhone(e.target.value)}
+            onChange={(e) => {
+              clearError();
+              setContactPhone(e.target.value);
+            }}
             placeholder={labels.placeholderPhone}
             required
           />
@@ -185,7 +253,10 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
             type="email"
             className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
             value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
+            onChange={(e) => {
+              clearError();
+              setContactEmail(e.target.value);
+            }}
             placeholder={labels.placeholderEmail || "you@example.com"}
             required
           />
@@ -196,7 +267,10 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
         <textarea
           className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white min-h-24"
           value={contactNote}
-          onChange={(e) => setContactNote(e.target.value)}
+          onChange={(e) => {
+            clearError();
+            setContactNote(e.target.value);
+          }}
           placeholder={labels.placeholderSpecial}
         />
       </Field>
@@ -221,5 +295,3 @@ export function CheckoutForm({ preset, labels, locale = "zh" }: { preset: Preset
     </form>
   );
 }
-
-

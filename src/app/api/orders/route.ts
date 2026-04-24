@@ -15,7 +15,7 @@ export async function GET(req: Request) {
       "SELECT email FROM user_emails WHERE user_id = $1",
       [session.userId]
     );
-    const emails = emailRows.map(r => r.email);
+    const emails = Array.from(new Set([session.email, ...emailRows.map(r => r.email)]));
     
     if (emails.length > 0) {
       const { rows } = await db.query(
@@ -51,11 +51,19 @@ export async function GET(req: Request) {
     pickupTime: new Date(b.pickup_time).toISOString(),
     pickupLocation: b.pickup_location,
     dropoffLocation: b.dropoff_location,
+    contactEmail: b.contact_email,
     status: b.status,
     isUrgent: b.is_urgent,
     totalJpy: b.pricing_total_jpy,
     vehicleName: b.vehicle_name
   }));
 
-  return NextResponse.json({ rows });
+  return NextResponse.json(
+    { rows },
+    {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    }
+  );
 }

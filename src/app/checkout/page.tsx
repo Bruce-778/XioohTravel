@@ -155,6 +155,14 @@ export default async function CheckoutPage({
               placeholderLocation: t("search.placeholderLocation"),
               locationTip: t("search.locationTip"),
               placeholderEmail: t("form.placeholderEmail"),
+              flightNumberRequired: t("form.error.flightNumberRequired"),
+              pickupLocationRequired: t("form.error.pickupLocationRequired"),
+              dropoffLocationRequired: t("form.error.dropoffLocationRequired"),
+              contactNameRequired: t("form.error.contactNameRequired"),
+              contactPhoneRequired: t("form.error.contactPhoneRequired"),
+              contactPhoneInvalid: t("form.error.contactPhoneInvalid"),
+              contactEmailRequired: t("form.error.contactEmailRequired"),
+              contactEmailInvalid: t("form.error.contactEmailInvalid"),
             }} 
           />
         </div>

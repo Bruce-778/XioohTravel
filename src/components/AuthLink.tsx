@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useSession } from "@/hooks/useSession";
+import Link from "next/link";
 
 export function AuthLink({
   href,
@@ -12,21 +11,9 @@ export function AuthLink({
   className?: string;
   children: React.ReactNode;
 }) {
-  const router = useRouter();
-  const { user } = useSession();
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!user) {
-      router.push(`/login`);
-    } else {
-      router.push(href);
-    }
-  };
-
   return (
-    <a href={href} onClick={handleClick} className={className}>
+    <Link href={href} className={className}>
       {children}
-    </a>
+    </Link>
   );
 }

@@ -41,6 +41,11 @@ export const CreateBookingSchema = z.object({
   path: ["flightNumber"]
 });
 
+export const RetryPaymentSchema = z.object({
+  bookingId: z.string().min(5),
+  contactEmail: z.string().email().optional()
+});
+
 export const CancelBookingSchema = z.object({
   bookingId: z.string().min(5),
   contactEmail: z.string().email(),
@@ -65,5 +70,4 @@ export const AdminPricingRuleSchema = z.object({
   nightFeeJpy: z.coerce.number().int().min(0).max(100000).optional(),
   urgentFeeJpy: z.coerce.number().int().min(0).max(100000).optional()
 });
-
 

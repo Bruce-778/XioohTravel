@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   const { t } = await getT();
   try {
     const { secret } = await req.json();
-    const adminSecret = process.env.ADMIN_SECRET_KEY || process.env.ADMIN_TOKEN;
+    const adminSecret = process.env.ADMIN_TOKEN || process.env.ADMIN_SECRET_KEY;
     
     if (secret !== adminSecret) {
       return NextResponse.json({ error: t("api.invalidSecret") }, { status: 400 });
