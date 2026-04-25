@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { getT } from "@/lib/i18n";
 
 function ServiceIcon({ children }: { children: React.ReactNode }) {
@@ -107,6 +108,7 @@ export async function HomeTrustSection() {
     {
       title: t("home.cases.item.night.title"),
       summary: t("home.cases.item.night.summary"),
+      imageSrc: "/home-services/serve-2.png",
       points: [
         t("home.cases.item.night.point1"),
         t("home.cases.item.night.point2"),
@@ -116,6 +118,7 @@ export async function HomeTrustSection() {
     {
       title: t("home.cases.item.family.title"),
       summary: t("home.cases.item.family.summary"),
+      imageSrc: "/home-services/serve-3.png",
       points: [
         t("home.cases.item.family.point1"),
         t("home.cases.item.family.point2"),
@@ -125,6 +128,7 @@ export async function HomeTrustSection() {
     {
       title: t("home.cases.item.business.title"),
       summary: t("home.cases.item.business.summary"),
+      imageSrc: "/home-services/serve-1.png",
       points: [
         t("home.cases.item.business.point1"),
         t("home.cases.item.business.point2"),
@@ -136,34 +140,50 @@ export async function HomeTrustSection() {
   return (
     <section className="pb-20 sm:pb-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10 sm:space-y-12">
-        <div className="card-elevated p-6 sm:p-8 lg:p-10 overflow-hidden">
-          <div className="relative">
-            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-brand-50 via-sky-50 to-white blur-2xl opacity-80 pointer-events-none" />
-            <div className="relative">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold border border-brand-100">
-                <span className="w-2 h-2 rounded-full bg-brand-500" />
-                {t("home.service.eyebrow")}
-              </div>
-              <h2 className="section-title mt-4">{t("home.service.title")}</h2>
-              <p className="section-subtitle max-w-3xl">{t("home.service.subtitle")}</p>
+        <div className="card-elevated p-6 sm:p-8 lg:p-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-100">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            {t("home.cases.eyebrow")}
+          </div>
+          <h2 className="section-title mt-4">{t("home.cases.title")}</h2>
+          <p className="section-subtitle max-w-3xl">{t("home.cases.subtitle")}</p>
 
-              <div className="mt-8 grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {serviceItems.map((item) => (
-                  <div
-                    key={item.title}
-                    className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm hover:shadow-lg hover:border-brand-200 transition-all duration-300"
-                  >
-                    <div className="flex items-start gap-4">
-                      <ServiceIcon>{item.icon}</ServiceIcon>
-                      <div>
-                        <h3 className="text-lg font-bold text-slate-900">{item.title}</h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">{item.desc}</p>
+          <div className="mt-8 grid lg:grid-cols-3 gap-5">
+            {cases.map((item) => (
+              <div
+                key={item.title}
+                className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-xl"
+              >
+                <div className="relative aspect-square overflow-hidden bg-slate-100">
+                  <Image
+                    src={item.imageSrc}
+                    alt={item.title}
+                    fill
+                    sizes="(min-width: 1024px) 33vw, 100vw"
+                    className="object-cover"
+                  />
+                  <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-slate-950/15 to-transparent" />
+                </div>
+
+                <div className="p-6">
+                  <h3 className="text-lg font-bold text-slate-900">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{item.summary}</p>
+
+                  <div className="mt-5 space-y-3">
+                    {item.points.map((point) => (
+                      <div key={point} className="flex items-start gap-3">
+                        <div className="mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                        <p className="text-sm leading-6 text-slate-700">{point}</p>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -212,43 +232,34 @@ export async function HomeTrustSection() {
           </div>
         </div>
 
-        <div className="card-elevated p-6 sm:p-8 lg:p-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold border border-emerald-100">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            {t("home.cases.eyebrow")}
-          </div>
-          <h2 className="section-title mt-4">{t("home.cases.title")}</h2>
-          <p className="section-subtitle max-w-3xl">{t("home.cases.subtitle")}</p>
-
-          <div className="mt-8 grid lg:grid-cols-3 gap-5">
-            {cases.map((item, index) => (
-              <div
-                key={item.title}
-                className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-white via-white to-slate-50 p-6 shadow-sm hover:shadow-xl transition-all duration-300"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-sm font-bold shadow-md">
-                    0{index + 1}
-                  </div>
-                  <h3 className="text-lg font-bold text-slate-900">{item.title}</h3>
-                </div>
-
-                <p className="mt-4 text-sm leading-7 text-slate-600">{item.summary}</p>
-
-                <div className="mt-5 space-y-3">
-                  {item.points.map((point) => (
-                    <div key={point} className="flex items-start gap-3">
-                      <div className="mt-1 h-5 w-5 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      <p className="text-sm leading-6 text-slate-700">{point}</p>
-                    </div>
-                  ))}
-                </div>
+        <div className="card-elevated p-6 sm:p-8 lg:p-10 overflow-hidden">
+          <div className="relative">
+            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-r from-brand-50 via-sky-50 to-white blur-2xl opacity-80 pointer-events-none" />
+            <div className="relative">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold border border-brand-100">
+                <span className="w-2 h-2 rounded-full bg-brand-500" />
+                {t("home.service.eyebrow")}
               </div>
-            ))}
+              <h2 className="section-title mt-4">{t("home.service.title")}</h2>
+              <p className="section-subtitle max-w-3xl">{t("home.service.subtitle")}</p>
+
+              <div className="mt-8 grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {serviceItems.map((item) => (
+                  <div
+                    key={item.title}
+                    className="rounded-3xl border border-slate-200 bg-white/90 p-5 shadow-sm hover:shadow-lg hover:border-brand-200 transition-all duration-300"
+                  >
+                    <div className="flex items-start gap-4">
+                      <ServiceIcon>{item.icon}</ServiceIcon>
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-900">{item.title}</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{item.desc}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>

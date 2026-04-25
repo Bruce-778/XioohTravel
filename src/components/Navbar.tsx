@@ -7,6 +7,8 @@ import { CurrencySwitch } from "@/components/CurrencySwitch";
 import { useSession } from "@/hooks/useSession";
 import { AuthLink } from "@/components/AuthLink";
 
+const BRAND_NAME = "XioohTravel";
+
 export function Navbar({
   locale,
   labels,
@@ -48,25 +50,35 @@ export function Navbar({
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between gap-4 py-3">
           <Link 
             href="/" 
-            className="flex items-center group transition-transform duration-200 hover:scale-105"
+            className="group flex min-w-0 items-center gap-3 py-1 transition-opacity duration-200 hover:opacity-85"
           >
-            <Image
-              src="/brand/xioohtravel-logo.svg"
-              alt={`${labels.brandName} ${labels.brandTagline}`}
-              width={280}
-              height={92}
-              priority
-              className="h-11 w-auto sm:h-12"
-            />
+            <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl sm:h-12 sm:w-12">
+              <Image
+                src="/brand/xioohtravel-avatar.jpg"
+                alt={BRAND_NAME}
+                fill
+                sizes="48px"
+                priority
+                className="object-cover"
+              />
+            </div>
+            <div className="min-w-0">
+              <div className="truncate text-base font-black tracking-tight text-slate-950 sm:text-[1.35rem]">
+                {BRAND_NAME}
+              </div>
+              <div className="truncate text-[11px] font-semibold leading-tight text-slate-500 sm:text-[13px]">
+                {labels.brandTagline}
+              </div>
+            </div>
             <span className="sr-only">
-              {labels.brandName} {labels.brandTagline}
+              {BRAND_NAME} {labels.brandTagline}
             </span>
           </Link>
 
-          <nav className="flex items-center gap-2 sm:gap-4 text-sm">
+          <nav className="flex shrink-0 items-center gap-2 text-sm sm:gap-4">
             <div className="flex items-center gap-1 mr-2 border-r border-slate-200 pr-2">
               <AuthLink 
                 href="/" 
