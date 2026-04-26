@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomInt } from "node:crypto";
 import type Stripe from "stripe";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -46,13 +46,13 @@ type BookingRow = {
   vehicle_name?: string;
 };
 
+const MAX_BOOKING_ID_RETRIES = 5;
+
 function generateBookingId() {
-  const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  const bytes = randomBytes(12);
   let suffix = "";
 
-  for (const value of bytes) {
-    suffix += alphabet[value % alphabet.length];
+  for (let index = 0; index < 10; index += 1) {
+    suffix += String(randomInt(10));
   }
 
   return `XT${suffix}`;
@@ -129,52 +129,68 @@ export async function calculateBookingSnapshot(data: CreateBookingInput) {
 
 export async function createPendingBooking(data: CreateBookingInput) {
   const snapshot = await calculateBookingSnapshot(data);
-  const bookingId = generateBookingId();
+  let bookingId = "";
 
-  await db.query(
-    `INSERT INTO bookings (
-      id, status, trip_type, pickup_time, pickup_location, dropoff_location,
-      flight_number, flight_note, passengers, child_seats,
-      luggage_small, luggage_medium, luggage_large,
-      contact_name, contact_phone, contact_email, contact_note,
-      vehicle_type_id, is_urgent, pricing_base_jpy, pricing_night_jpy,
-      pricing_urgent_jpy, pricing_child_seat_jpy, pricing_total_jpy,
-      stripe_payment_status
-    ) VALUES (
-      $1, 'PENDING_PAYMENT', $2, $3, $4, $5,
-      $6, $7, $8, $9,
-      $10, $11, $12,
-      $13, $14, $15, $16,
-      $17, $18, $19, $20,
-      $21, $22, $23,
-      'unpaid'
-    )`,
-    [
-      bookingId,
-      data.tripType,
-      snapshot.pickupTime,
-      data.pickupLocation,
-      data.dropoffLocation,
-      data.flightNumber,
-      data.flightNote,
-      data.passengers,
-      data.childSeats,
-      data.luggageSmall,
-      data.luggageMedium,
-      data.luggageLarge,
-      data.contactName,
-      data.contactPhone,
-      data.contactEmail,
-      data.contactNote,
-      data.vehicleTypeId,
-      snapshot.isUrgent,
-      snapshot.base,
-      snapshot.night,
-      snapshot.urgent,
-      snapshot.childSeat,
-      snapshot.total,
-    ]
-  );
+  for (let attempt = 0; attempt < MAX_BOOKING_ID_RETRIES; attempt += 1) {
+    bookingId = generateBookingId();
+
+    try {
+      await db.query(
+        `INSERT INTO bookings (
+          id, status, trip_type, pickup_time, pickup_location, dropoff_location,
+          flight_number, flight_note, passengers, child_seats,
+          luggage_small, luggage_medium, luggage_large,
+          contact_name, contact_phone, contact_email, contact_note,
+          vehicle_type_id, is_urgent, pricing_base_jpy, pricing_night_jpy,
+          pricing_urgent_jpy, pricing_child_seat_jpy, pricing_total_jpy,
+          stripe_payment_status
+        ) VALUES (
+          $1, 'PENDING_PAYMENT', $2, $3, $4, $5,
+          $6, $7, $8, $9,
+          $10, $11, $12,
+          $13, $14, $15, $16,
+          $17, $18, $19, $20,
+          $21, $22, $23,
+          'unpaid'
+        )`,
+        [
+          bookingId,
+          data.tripType,
+          snapshot.pickupTime,
+          data.pickupLocation,
+          data.dropoffLocation,
+          data.flightNumber,
+          data.flightNote,
+          data.passengers,
+          data.childSeats,
+          data.luggageSmall,
+          data.luggageMedium,
+          data.luggageLarge,
+          data.contactName,
+          data.contactPhone,
+          data.contactEmail,
+          data.contactNote,
+          data.vehicleTypeId,
+          snapshot.isUrgent,
+          snapshot.base,
+          snapshot.night,
+          snapshot.urgent,
+          snapshot.childSeat,
+          snapshot.total,
+        ]
+      );
+      break;
+    } catch (error: any) {
+      if (error?.code === "23505" && attempt < MAX_BOOKING_ID_RETRIES - 1) {
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (!bookingId) {
+    throw new Error("Failed to generate booking id");
+  }
 
   return {
     bookingId,

@@ -5,6 +5,7 @@ import { formatMoneyFromJpy } from "@/lib/currencyClient";
 import { formatDateTimeJST } from "@/lib/timeFormat";
 import type { Currency } from "@/lib/currency";
 import { useSession } from "@/hooks/useSession";
+import { getLocalizedLocation } from "@/lib/locationData";
 
 function getCurrencyFromCookie(): Currency {
   if (typeof document === "undefined") return "JPY";
@@ -19,12 +20,31 @@ function getCurrencyFromCookie(): Currency {
 type BookingRow = {
   id: string;
   createdAt: string;
+  tripType: string;
   pickupTime: string;
   pickupLocation: string;
   dropoffLocation: string;
+  flightNumber: string | null;
+  flightNote: string | null;
+  passengers: number;
+  childSeats: number;
+  luggageSmall: number;
+  luggageMedium: number;
+  luggageLarge: number;
+  contactName: string;
+  contactPhone: string;
   contactEmail: string;
+  contactNote: string | null;
   status: string;
   isUrgent: boolean;
+  pricingBaseJpy: number;
+  pricingNightJpy: number;
+  pricingUrgentJpy: number;
+  pricingChildSeatJpy: number;
+  pricingManualAdjustmentJpy: number;
+  pricingNote: string | null;
+  cancelReason: string | null;
+  cancelledAt: string | null;
   totalJpy: number;
   vehicleName: string;
 };
@@ -69,6 +89,38 @@ type Labels = {
   emailRequired: string;
   guestLookupHint: string;
   pendingPaymentHint: string;
+  details: string;
+  hideDetails: string;
+  tripSection: string;
+  passengersSection: string;
+  contactSection: string;
+  pricingSection: string;
+  timelineSection: string;
+  tripType: string;
+  pickupLocation: string;
+  dropoffLocation: string;
+  flightNumber: string;
+  flightNote: string;
+  passengersCount: string;
+  childSeats: string;
+  luggageSmall: string;
+  luggageMedium: string;
+  luggageLarge: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  contactNote: string;
+  pricingBase: string;
+  pricingNight: string;
+  pricingUrgent: string;
+  pricingChildSeat: string;
+  pricingManualAdjustment: string;
+  pricingNote: string;
+  createdAt: string;
+  cancelledAt: string;
+  cancelReasonValue: string;
+  notProvided: string;
+  tripTypes: Record<string, string>;
 };
 
 export function OrdersClient({
@@ -87,6 +139,7 @@ export function OrdersClient({
   const [currency, setCurrency] = useState<Currency>("JPY");
   const [queryEmail, setQueryEmail] = useState(initialEmail);
   const [hasSearched, setHasSearched] = useState(Boolean(initialEmail));
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const { user } = useSession();
 
   const [cancelBookingId, setCancelBookingId] = useState<string | null>(null);
@@ -227,6 +280,13 @@ export function OrdersClient({
     }
   }
 
+  function renderDetailValue(value: string | null | undefined) {
+    if (!value || value.trim() === "") {
+      return labels.notProvided;
+    }
+    return value;
+  }
+
   const showResults = Boolean(user) || hasSearched;
 
   return (
@@ -317,13 +377,15 @@ export function OrdersClient({
                     </td>
                   </tr>
                 ) : (
-                  rows.map((row) => {
+                  rows.flatMap((row) => {
                     const displayVehicle = labels.vehicles[row.vehicleName] || row.vehicleName;
                     const displayStatus = labels.statuses[row.status] || row.status;
+                    const displayTripType = labels.tripTypes[row.tripType] || row.tripType;
                     const isRetryable = row.status === "PENDING_PAYMENT";
+                    const isExpanded = expandedBookingId === row.id;
 
-                    return (
-                      <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                    const summaryRow = (
+                      <tr key={`${row.id}-summary`} className="hover:bg-slate-50/50 transition-colors">
                         <td className="px-6 py-4 font-mono text-[11px] text-slate-400">{row.id}</td>
                         <td className="px-6 py-4 font-medium text-slate-900">{formatDateTimeJST(row.pickupTime, locale)}</td>
                         <td className="px-6 py-4 text-slate-600">{displayVehicle}</td>
@@ -348,6 +410,12 @@ export function OrdersClient({
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex flex-wrap gap-3 items-center">
+                            <button
+                              className="text-xs font-bold text-slate-600 hover:text-slate-900 hover:underline transition-all"
+                              onClick={() => setExpandedBookingId(isExpanded ? null : row.id)}
+                            >
+                              {isExpanded ? labels.hideDetails : labels.details}
+                            </button>
                             {isRetryable ? (
                               <button
                                 className="text-xs font-bold text-brand-700 hover:text-brand-800 hover:underline transition-all"
@@ -377,6 +445,162 @@ export function OrdersClient({
                         </td>
                       </tr>
                     );
+
+                    if (!isExpanded) {
+                      return [summaryRow];
+                    }
+
+                    const detailRow = (
+                      <tr key={`${row.id}-details`} className="bg-slate-50/70">
+                        <td colSpan={6} className="px-6 pb-6 pt-1">
+                          <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-5">
+                            <div className="grid gap-4 lg:grid-cols-2">
+                              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                                <h4 className="text-sm font-bold text-slate-900 mb-3">{labels.tripSection}</h4>
+                                <dl className="space-y-2 text-sm">
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.tripType}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{displayTripType}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.pickup}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{formatDateTimeJST(row.pickupTime, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.pickupLocation}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{getLocalizedLocation(row.pickupLocation, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.dropoffLocation}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{getLocalizedLocation(row.dropoffLocation, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.flightNumber}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{renderDetailValue(row.flightNumber)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.flightNote}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{renderDetailValue(row.flightNote)}</dd>
+                                  </div>
+                                </dl>
+                              </div>
+
+                              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                                <h4 className="text-sm font-bold text-slate-900 mb-3">{labels.passengersSection}</h4>
+                                <dl className="space-y-2 text-sm">
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.passengersCount}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{row.passengers}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.childSeats}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{row.childSeats}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.luggageSmall}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{row.luggageSmall}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.luggageMedium}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{row.luggageMedium}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.luggageLarge}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{row.luggageLarge}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.status}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">
+                                      {displayStatus}{row.isUrgent ? ` · ${labels.urgentTag}` : ""}
+                                    </dd>
+                                  </div>
+                                </dl>
+                              </div>
+                            </div>
+
+                            <div className="grid gap-4 lg:grid-cols-2">
+                              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                                <h4 className="text-sm font-bold text-slate-900 mb-3">{labels.contactSection}</h4>
+                                <dl className="space-y-2 text-sm">
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.contactName}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{renderDetailValue(row.contactName)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.contactPhone}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{renderDetailValue(row.contactPhone)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.contactEmail}</dt>
+                                    <dd className="font-medium text-slate-900 text-right break-all">{renderDetailValue(row.contactEmail)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.contactNote}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{renderDetailValue(row.contactNote)}</dd>
+                                  </div>
+                                </dl>
+                              </div>
+
+                              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                                <h4 className="text-sm font-bold text-slate-900 mb-3">{labels.pricingSection}</h4>
+                                <dl className="space-y-2 text-sm">
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.pricingBase}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingBaseJpy, currency, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.pricingNight}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingNightJpy, currency, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.pricingUrgent}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingUrgentJpy, currency, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.pricingChildSeat}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingChildSeatJpy, currency, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.pricingManualAdjustment}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingManualAdjustmentJpy, currency, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4 border-t border-slate-200 pt-2">
+                                    <dt className="text-slate-600 font-semibold">{labels.amount}</dt>
+                                    <dd className="font-bold text-slate-900 text-right">{formatMoneyFromJpy(row.totalJpy, currency, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.pricingNote}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{renderDetailValue(row.pricingNote)}</dd>
+                                  </div>
+                                </dl>
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                              <h4 className="text-sm font-bold text-slate-900 mb-3">{labels.timelineSection}</h4>
+                              <dl className="grid gap-2 md:grid-cols-2 text-sm">
+                                <div className="flex justify-between gap-4">
+                                  <dt className="text-slate-500">{labels.createdAt}</dt>
+                                  <dd className="font-medium text-slate-900 text-right">{formatDateTimeJST(row.createdAt, locale)}</dd>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                  <dt className="text-slate-500">{labels.cancelledAt}</dt>
+                                  <dd className="font-medium text-slate-900 text-right">
+                                    {row.cancelledAt ? formatDateTimeJST(row.cancelledAt, locale) : labels.notProvided}
+                                  </dd>
+                                </div>
+                                <div className="flex justify-between gap-4 md:col-span-2">
+                                  <dt className="text-slate-500">{labels.cancelReasonValue}</dt>
+                                  <dd className="font-medium text-slate-900 text-right">{renderDetailValue(row.cancelReason)}</dd>
+                                </div>
+                              </dl>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+
+                    return [summaryRow, detailRow];
                   })
                 )}
               </tbody>
