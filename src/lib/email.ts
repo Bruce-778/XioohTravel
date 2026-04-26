@@ -1,4 +1,4 @@
-import { Resend } from "resend";
+import https from "node:https";
 import { formatDateTimeJST } from "@/lib/timeFormat";
 import { getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
 
@@ -26,7 +26,8 @@ export type PaymentConfirmationBooking = {
   vehicle_name: string | null;
 };
 
-let resendClient: Resend | null = null;
+const PAYMENT_CONFIRMATION_EMAIL_MAX_ATTEMPTS = 3;
+const PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS = [1000, 3000];
 
 export function maskEmailForLog(email: string) {
   const normalized = email.trim();
@@ -51,20 +52,42 @@ export function getPaymentConfirmationEmailDiagnostics() {
   };
 }
 
+type ResendLikeError = {
+  name?: string;
+  statusCode?: number | null;
+  message?: string;
+};
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function buildPaymentConfirmationIdempotencyKey(bookingId: string) {
+  return `payment-confirmation-${bookingId}`;
+}
+
+function shouldRetryResendError(error: ResendLikeError | null | undefined) {
+  if (!error) return false;
+  if (error.statusCode === null) return true;
+  if (typeof error.statusCode === "number" && (error.statusCode >= 500 || error.statusCode === 429)) {
+    return true;
+  }
+
+  return error.name === "application_error" || error.name === "internal_server_error";
+}
+
 function isResendDevSender(from: string) {
   return from.toLowerCase().includes("onboarding@resend.dev");
 }
 
-function getResend() {
+function getResendApiKey() {
   if (!process.env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY is not configured");
   }
 
-  if (!resendClient) {
-    resendClient = new Resend(process.env.RESEND_API_KEY);
-  }
-
-  return resendClient;
+  return process.env.RESEND_API_KEY;
 }
 
 function getBookingEmailFrom() {
@@ -152,9 +175,107 @@ function renderRow(label: string, value: string) {
   `;
 }
 
+type ResendEmailPayload = {
+  from: string;
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+  replyTo?: string;
+};
+
+async function sendResendEmailRequest(payload: ResendEmailPayload, idempotencyKey: string) {
+  const apiKey = getResendApiKey();
+  const requestBody = JSON.stringify({
+    from: payload.from,
+    to: [payload.to],
+    subject: payload.subject,
+    html: payload.html,
+    text: payload.text,
+    ...(payload.replyTo ? { reply_to: payload.replyTo } : {}),
+  });
+
+  return await new Promise<{
+    data: { id?: string } | null;
+    error: ResendLikeError | null;
+  }>((resolve) => {
+    const request = https.request(
+      "https://api.resend.com/emails",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(requestBody),
+          "Idempotency-Key": idempotencyKey,
+        },
+      },
+      (response) => {
+        let rawBody = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          rawBody += chunk;
+        });
+        response.on("end", () => {
+          const statusCode = response.statusCode ?? null;
+
+          try {
+            const parsed = rawBody ? JSON.parse(rawBody) : {};
+
+            if (statusCode && statusCode >= 200 && statusCode < 300) {
+              resolve({
+                data: parsed,
+                error: null,
+              });
+              return;
+            }
+
+            resolve({
+              data: null,
+              error: {
+                name: parsed?.name ?? "application_error",
+                statusCode,
+                message:
+                  parsed?.message ??
+                  response.statusMessage ??
+                  "Failed to send payment confirmation email",
+              },
+            });
+          } catch {
+            resolve({
+              data: null,
+              error: {
+                name: "application_error",
+                statusCode,
+                message:
+                  rawBody ||
+                  response.statusMessage ||
+                  "Failed to send payment confirmation email",
+              },
+            });
+          }
+        });
+      }
+    );
+
+    request.on("error", (error) => {
+      resolve({
+        data: null,
+        error: {
+          name: "application_error",
+          statusCode: null,
+          message: error.message || "Unable to reach Resend",
+        },
+      });
+    });
+
+    request.write(requestBody);
+    request.end();
+  });
+}
+
 export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfirmationBooking) {
   const diagnostics = getPaymentConfirmationEmailDiagnostics();
-  const resend = getResend();
   const from = getBookingEmailFrom();
   const usingTestSender = isResendDevSender(from);
   const testRecipient = usingTestSender ? getBookingEmailTestTo() : null;
@@ -164,12 +285,14 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
   }
 
   const recipientEmail = testRecipient ?? booking.contact_email;
+  const idempotencyKey = buildPaymentConfirmationIdempotencyKey(booking.id);
   console.info("[email] Sending booking payment confirmation", {
     bookingId: booking.id,
     from,
     usingTestSender,
     recipientEmail: maskEmailForLog(recipientEmail),
     originalCustomerEmail: maskEmailForLog(booking.contact_email),
+    idempotencyKey,
     diagnostics,
   });
 
@@ -302,7 +425,7 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
     .filter(Boolean)
     .join("\n");
 
-  const response = await resend.emails.send({
+  const emailPayload: ResendEmailPayload = {
     from,
     to: recipientEmail,
     subject,
@@ -311,26 +434,48 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
     ...(process.env.BOOKING_EMAIL_REPLY_TO
       ? { replyTo: process.env.BOOKING_EMAIL_REPLY_TO }
       : {}),
-  });
+  };
 
-  if (response.error) {
+  for (let attempt = 1; attempt <= PAYMENT_CONFIRMATION_EMAIL_MAX_ATTEMPTS; attempt += 1) {
+    const response = await sendResendEmailRequest(emailPayload, idempotencyKey);
+
+    if (!response.error) {
+      console.info("[email] Resend accepted booking payment confirmation", {
+        bookingId: booking.id,
+        recipientEmail: maskEmailForLog(recipientEmail),
+        providerId: response.data?.id ?? null,
+        attempt,
+      });
+
+      return {
+        providerId: response.data?.id ?? null,
+      };
+    }
+
+    const retryable = shouldRetryResendError(response.error);
     console.error("[email] Resend rejected booking payment confirmation", {
       bookingId: booking.id,
       recipientEmail: maskEmailForLog(recipientEmail),
       originalCustomerEmail: maskEmailForLog(booking.contact_email),
       diagnostics,
       responseError: response.error,
+      attempt,
+      retryable,
     });
-    throw new Error(response.error.message || "Failed to send payment confirmation email");
+
+    if (!retryable || attempt >= PAYMENT_CONFIRMATION_EMAIL_MAX_ATTEMPTS) {
+      throw new Error(response.error.message || "Failed to send payment confirmation email");
+    }
+
+    const delayMs = PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS[attempt - 1] ?? PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS[PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS.length - 1] ?? 1000;
+    console.warn("[email] Retrying booking payment confirmation", {
+      bookingId: booking.id,
+      attempt,
+      nextAttempt: attempt + 1,
+      delayMs,
+    });
+    await sleep(delayMs);
   }
 
-  console.info("[email] Resend accepted booking payment confirmation", {
-    bookingId: booking.id,
-    recipientEmail: maskEmailForLog(recipientEmail),
-    providerId: response.data?.id ?? null,
-  });
-
-  return {
-    providerId: response.data?.id ?? null,
-  };
+  throw new Error("Failed to send payment confirmation email");
 }

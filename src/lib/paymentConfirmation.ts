@@ -44,7 +44,7 @@ async function getBookingForPaymentConfirmation(client: PoolClient, bookingId: s
      LEFT JOIN vehicle_types v ON b.vehicle_type_id = v.id
      WHERE b.id = $1
      LIMIT 1
-     FOR UPDATE`,
+     FOR UPDATE OF b`,
     [bookingId]
   );
 

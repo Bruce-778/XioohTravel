@@ -8,10 +8,11 @@ export async function GET(req: Request) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const dateType = searchParams.get("dateType") || "created_at";
+  const dateType = searchParams.get("dateType") || "createdAt";
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
   const status = searchParams.get("status");
+  const dateColumn = dateType === "pickupTime" ? "pickup_time" : "created_at";
 
   let query = `
     SELECT b.*, v.name as vehicle_name 
@@ -23,11 +24,11 @@ export async function GET(req: Request) {
   let paramIndex = 1;
 
   if (startDate) {
-    query += ` AND b.${dateType === 'createdAt' ? 'created_at' : 'pickup_time'} >= $${paramIndex++}`;
+    query += ` AND b.${dateColumn} >= $${paramIndex++}`;
     params.push(new Date(startDate));
   }
   if (endDate) {
-    query += ` AND b.${dateType === 'createdAt' ? 'created_at' : 'pickup_time'} <= $${paramIndex++}`;
+    query += ` AND b.${dateColumn} <= $${paramIndex++}`;
     params.push(new Date(endDate));
   }
 
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
     params.push(status);
   }
 
-  query += ` ORDER BY b.created_at DESC`;
+  query += ` ORDER BY b.is_urgent DESC, b.${dateColumn} DESC, b.created_at DESC`;
 
   const { rows: bookings } = await db.query(query, params);
 

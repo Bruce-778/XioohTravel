@@ -32,16 +32,35 @@ function sortPricingRules(rules: PricingRule[]) {
 type AdminRow = {
   id: string;
   createdAt: string;
+  tripType: string;
   pickupTime: string;
+  pickupLocation: string;
+  dropoffLocation: string;
   fromTo: string;
-  vehicleName: string;
+  flightNumber: string | null;
+  flightNote: string | null;
+  vehicleName: string | null;
+  vehicleTypeId: string | null;
+  passengers: number;
+  childSeats: number;
+  luggageSmall: number;
+  luggageMedium: number;
+  luggageLarge: number;
   contactName: string;
+  contactPhone: string;
   contactEmail: string;
+  contactNote: string | null;
   status: string;
   isUrgent: boolean;
+  pricingBaseJpy: number;
+  pricingNightJpy: number;
+  pricingUrgentJpy: number;
+  pricingChildSeatJpy: number;
   totalJpy: number;
-  manualAdjustmentJpy: number;
+  pricingManualAdjustmentJpy: number;
   pricingNote: string | null;
+  cancelReason: string | null;
+  cancelledAt: string | null;
 };
 type PricingRule = {
   id: string;
@@ -89,6 +108,13 @@ type Labels = {
   loginPlaceholder: string;
   urgentTag: string;
   close: string;
+  details: string;
+  hideDetails: string;
+  tripSection: string;
+  passengersSection: string;
+  contactSection: string;
+  pricingSection: string;
+  timelineSection: string;
   export: string;
   dateType: string;
   dateRange: string;
@@ -141,6 +167,29 @@ type Labels = {
   startDate: string;
   endDate: string;
   customDateRange: string;
+  pickupLocation: string;
+  dropoffLocation: string;
+  flightNumber: string;
+  flightNote: string;
+  passengersCount: string;
+  childSeats: string;
+  luggageSmall: string;
+  luggageMedium: string;
+  luggageLarge: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  contactNote: string;
+  pricingBase: string;
+  pricingNight: string;
+  pricingUrgent: string;
+  pricingChildSeat: string;
+  pricingManualAdjustment: string;
+  pricingNoteValue: string;
+  createdAt: string;
+  cancelledAt: string;
+  cancelReasonValue: string;
+  notProvided: string;
   pricingRuleNotFound: string;
   vehicleTypeNotFound: string;
   loadFailed: string;
@@ -153,6 +202,21 @@ type Labels = {
   selectVehicle: string;
   pricingLockedHint: string;
 };
+
+function getStatusBadgeClass(status: string) {
+  switch (status) {
+    case "CONFIRMED":
+      return "bg-green-500 text-white";
+    case "PENDING_PAYMENT":
+      return "bg-amber-500 text-white";
+    case "CANCELLED":
+      return "bg-red-500 text-white";
+    case "COMPLETED":
+      return "bg-slate-700 text-white";
+    default:
+      return "bg-blue-500 text-white";
+  }
+}
 
 export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; locale?: string }) {
   const [token, setToken] = useState("");
@@ -177,6 +241,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   const [startTime, setStartTime] = useState<string>("00:00");
   const [endDate, setEndDate] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("23:59");
+  const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingRow = useMemo(() => rows.find((r) => r.id === editingId) ?? null, [rows, editingId]);
@@ -304,6 +369,14 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     }
   }
 
+  function renderDetailValue(value: string | null | undefined) {
+    if (!value || value.trim() === "") {
+      return labels.notProvided;
+    }
+
+    return value;
+  }
+
   async function exportOrders() {
     setLoading(true);
     setError(null);
@@ -340,7 +413,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   useEffect(() => {
     if (!editingRow) return;
     setStatus(editingRow.status);
-    setManualAdjustmentJpy(editingRow.manualAdjustmentJpy);
+    setManualAdjustmentJpy(editingRow.pricingManualAdjustmentJpy);
     setPricingNote(editingRow.pricingNote ?? "");
   }, [editingRow]);
 
@@ -725,8 +798,12 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
             <>
               <div className="space-y-3">
                 {paginatedOrders.map((r) => {
-                  const displayVehicle = labels.vehicles[r.vehicleName] || r.vehicleName;
+                  const displayVehicle = r.vehicleName
+                    ? labels.vehicles[r.vehicleName] || r.vehicleName
+                    : labels.notProvided;
                   const displayStatus = labels.statuses[r.status] || r.status;
+                  const displayTripType = labels.tripTypes[r.tripType as keyof typeof labels.tripTypes] || r.tripType;
+                  const isExpanded = expandedBookingId === r.id;
 
                   return (
                     <div
@@ -773,12 +850,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                               </div>
                               
                               {/* Status Badge */}
-                              <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap ${
-                                r.status === 'CONFIRMED' ? 'bg-green-500 text-white' :
-                                r.status === 'PENDING' ? 'bg-amber-500 text-white' :
-                                r.status === 'CANCELLED' ? 'bg-red-500 text-white' :
-                                'bg-blue-500 text-white'
-                              }`}>
+                              <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap ${getStatusBadgeClass(r.status)}`}>
                                 {displayStatus}
                               </span>
                             </div>
@@ -824,24 +896,175 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                               <div className="text-2xl font-bold text-brand-600">
                                 {formatMoneyFromJpy(r.totalJpy, currency, locale)}
                               </div>
-                              {r.manualAdjustmentJpy !== 0 && (
+                              {r.pricingManualAdjustmentJpy !== 0 && (
                                 <div className={`text-xs font-semibold mt-1.5 px-2 py-0.5 rounded ${
-                                  r.manualAdjustmentJpy > 0 ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'
+                                  r.pricingManualAdjustmentJpy > 0 ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'
                                 }`}>
-                                  {r.manualAdjustmentJpy > 0 ? '+' : ''}{formatMoneyFromJpy(r.manualAdjustmentJpy, currency, locale)}
+                                  {r.pricingManualAdjustmentJpy > 0 ? '+' : ''}{formatMoneyFromJpy(r.pricingManualAdjustmentJpy, currency, locale)}
                                 </div>
                               )}
                             </div>
                             
-                            {/* Action Button */}
-                            <button
-                              className="px-5 py-2.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-700 transition-colors text-sm font-semibold whitespace-nowrap shadow-md hover:shadow-lg"
-                              onClick={() => setEditingId(r.id)}
-                            >
-                              {labels.edit}
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="px-4 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-sm font-semibold whitespace-nowrap"
+                                onClick={() => setExpandedBookingId(isExpanded ? null : r.id)}
+                              >
+                                {isExpanded ? labels.hideDetails : labels.details}
+                              </button>
+                              <button
+                                className="px-5 py-2.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-700 transition-colors text-sm font-semibold whitespace-nowrap shadow-md hover:shadow-lg"
+                                onClick={() => setEditingId(r.id)}
+                              >
+                                {labels.edit}
+                              </button>
+                            </div>
                           </div>
                         </div>
+
+                        {isExpanded ? (
+                          <div className="mt-5 border-t border-slate-200 pt-5">
+                            <div className="grid gap-4 xl:grid-cols-5 md:grid-cols-2">
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                <div className="text-sm font-semibold text-slate-900 mb-3">{labels.tripSection}</div>
+                                <div className="space-y-2 text-sm">
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.tripType}</div>
+                                    <div className="font-medium text-slate-900">{displayTripType}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.pickupTime}</div>
+                                    <div className="font-medium text-slate-900">{formatDateTimeJST(r.pickupTime, locale)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.pickupLocation}</div>
+                                    <div className="font-medium text-slate-900 break-words">{renderDetailValue(r.pickupLocation)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.dropoffLocation}</div>
+                                    <div className="font-medium text-slate-900 break-words">{renderDetailValue(r.dropoffLocation)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.flightNumber}</div>
+                                    <div className="font-medium text-slate-900">{renderDetailValue(r.flightNumber)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.flightNote}</div>
+                                    <div className="font-medium text-slate-900 break-words">{renderDetailValue(r.flightNote)}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                <div className="text-sm font-semibold text-slate-900 mb-3">{labels.passengersSection}</div>
+                                <div className="space-y-2 text-sm">
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.passengersCount}</div>
+                                    <div className="font-medium text-slate-900">{r.passengers}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.childSeats}</div>
+                                    <div className="font-medium text-slate-900">{r.childSeats}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.luggageSmall}</div>
+                                    <div className="font-medium text-slate-900">{r.luggageSmall}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.luggageMedium}</div>
+                                    <div className="font-medium text-slate-900">{r.luggageMedium}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.luggageLarge}</div>
+                                    <div className="font-medium text-slate-900">{r.luggageLarge}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.urgentTag}</div>
+                                    <div className="font-medium text-slate-900">{r.isUrgent ? labels.urgentTag : labels.notProvided}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                <div className="text-sm font-semibold text-slate-900 mb-3">{labels.contactSection}</div>
+                                <div className="space-y-2 text-sm">
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.contactName}</div>
+                                    <div className="font-medium text-slate-900">{renderDetailValue(r.contactName)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.contactPhone}</div>
+                                    <div className="font-medium text-slate-900">{renderDetailValue(r.contactPhone)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.contactEmail}</div>
+                                    <div className="font-medium text-slate-900 break-all">{renderDetailValue(r.contactEmail)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.contactNote}</div>
+                                    <div className="font-medium text-slate-900 break-words">{renderDetailValue(r.contactNote)}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                <div className="text-sm font-semibold text-slate-900 mb-3">{labels.pricingSection}</div>
+                                <div className="space-y-2 text-sm">
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.pricingBase}</div>
+                                    <div className="font-medium text-slate-900">{formatMoneyFromJpy(r.pricingBaseJpy, currency, locale)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.pricingNight}</div>
+                                    <div className="font-medium text-slate-900">{formatMoneyFromJpy(r.pricingNightJpy, currency, locale)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.pricingUrgent}</div>
+                                    <div className="font-medium text-slate-900">{formatMoneyFromJpy(r.pricingUrgentJpy, currency, locale)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.pricingChildSeat}</div>
+                                    <div className="font-medium text-slate-900">{formatMoneyFromJpy(r.pricingChildSeatJpy, currency, locale)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.pricingManualAdjustment}</div>
+                                    <div className="font-medium text-slate-900">{formatMoneyFromJpy(r.pricingManualAdjustmentJpy, currency, locale)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.amount}</div>
+                                    <div className="font-medium text-slate-900">{formatMoneyFromJpy(r.totalJpy, currency, locale)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.pricingNoteValue}</div>
+                                    <div className="font-medium text-slate-900 break-words">{renderDetailValue(r.pricingNote)}</div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                                <div className="text-sm font-semibold text-slate-900 mb-3">{labels.timelineSection}</div>
+                                <div className="space-y-2 text-sm">
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.createdAt}</div>
+                                    <div className="font-medium text-slate-900">{formatDateTimeJST(r.createdAt, locale)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.status}</div>
+                                    <div className="font-medium text-slate-900">{displayStatus}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.cancelledAt}</div>
+                                    <div className="font-medium text-slate-900">{r.cancelledAt ? formatDateTimeJST(r.cancelledAt, locale) : labels.notProvided}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.cancelReasonValue}</div>
+                                    <div className="font-medium text-slate-900 break-words">{renderDetailValue(r.cancelReason)}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -912,9 +1135,30 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
           >
             <div className="p-6">
               <div className="font-semibold text-lg mb-2">{labels.editTitle}</div>
-              <div className="text-sm text-slate-600 mb-6 pb-4 border-b border-slate-200">
-                <div className="font-mono text-xs text-slate-500 mb-1">{editingRow.id}</div>
-                <div>{editingRow.contactName}（{editingRow.contactEmail}）</div>
+              <div className="text-sm text-slate-600 mb-6 pb-4 border-b border-slate-200 space-y-3">
+                <div className="font-mono text-xs text-slate-500">{editingRow.id}</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>{editingRow.contactName}（{editingRow.contactEmail}）</span>
+                  {editingRow.isUrgent ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700">
+                      {labels.urgentTag}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="grid sm:grid-cols-3 gap-3 text-sm">
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+                    <div className="text-xs text-slate-500 mb-1">{labels.pickupTime}</div>
+                    <div className="font-medium text-slate-900">{formatDateTimeJST(editingRow.pickupTime, locale)}</div>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+                    <div className="text-xs text-slate-500 mb-1">{labels.route}</div>
+                    <div className="font-medium text-slate-900 break-words">{editingRow.fromTo}</div>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+                    <div className="text-xs text-slate-500 mb-1">{labels.amount}</div>
+                    <div className="font-medium text-slate-900">{formatMoneyFromJpy(editingRow.totalJpy, currency, locale)}</div>
+                  </div>
+                </div>
               </div>
 
               <div className="grid md:grid-cols-2 gap-4">
