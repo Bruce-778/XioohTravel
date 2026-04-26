@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import type Stripe from "stripe";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -47,7 +47,15 @@ type BookingRow = {
 };
 
 function generateBookingId() {
-  return randomUUID().replace(/-/g, "");
+  const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const bytes = randomBytes(12);
+  let suffix = "";
+
+  for (const value of bytes) {
+    suffix += alphabet[value % alphabet.length];
+  }
+
+  return `XT${suffix}`;
 }
 
 function getStripePaymentIntentId(session: Stripe.Checkout.Session) {

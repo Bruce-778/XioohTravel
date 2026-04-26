@@ -28,6 +28,10 @@ export type PaymentConfirmationBooking = {
 
 let resendClient: Resend | null = null;
 
+function isResendDevSender(from: string) {
+  return from.toLowerCase().includes("onboarding@resend.dev");
+}
+
 function getResend() {
   if (!process.env.RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY is not configured");
@@ -46,6 +50,10 @@ function getBookingEmailFrom() {
   }
 
   return process.env.BOOKING_EMAIL_FROM;
+}
+
+function getBookingEmailTestTo() {
+  return process.env.BOOKING_EMAIL_TEST_TO?.trim() || null;
 }
 
 function getOrdersUrl(email: string) {
@@ -124,6 +132,14 @@ function renderRow(label: string, value: string) {
 export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfirmationBooking) {
   const resend = getResend();
   const from = getBookingEmailFrom();
+  const usingTestSender = isResendDevSender(from);
+  const testRecipient = usingTestSender ? getBookingEmailTestTo() : null;
+
+  if (usingTestSender && !testRecipient) {
+    throw new Error("BOOKING_EMAIL_TEST_TO is required when using onboarding@resend.dev");
+  }
+
+  const recipientEmail = testRecipient ?? booking.contact_email;
   const ordersUrl = getOrdersUrl(booking.contact_email);
 
   const tripType = getTripTypeLabel(booking.trip_type);
@@ -134,7 +150,8 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
   const dropoffLocation = getLocalizedLocation(booking.dropoff_location, "en");
   const luggage = buildLuggageSummary(booking);
   const totalPaid = formatCurrencyJpy(Number(booking.pricing_total_jpy ?? 0));
-  const subject = `Payment confirmed - XioohTravel booking ${booking.id}`;
+  const subjectPrefix = usingTestSender ? "[Test Delivery] " : "";
+  const subject = `${subjectPrefix}Payment confirmed - XioohTravel booking ${booking.id}`;
 
   const details = [
     renderRow("Booking ID", booking.id),
@@ -154,6 +171,16 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
     renderRow("Total paid", totalPaid),
   ];
 
+  if (usingTestSender && testRecipient) {
+    details.splice(
+      2,
+      0,
+      renderRow("Delivery mode", "Test delivery via resend.dev"),
+      renderRow("Test recipient", testRecipient),
+      renderRow("Original customer email", booking.contact_email)
+    );
+  }
+
   if (booking.flight_number) {
     details.splice(8, 0, renderRow("Flight number", booking.flight_number));
   }
@@ -170,6 +197,10 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
     details.push(renderRow("Stripe payment", booking.stripe_payment_intent_id));
   }
 
+  const introText = usingTestSender
+    ? `This is a test delivery sent to ${escapeHtml(testRecipient ?? "")}. The original customer email is ${escapeHtml(booking.contact_email)}.`
+    : "Your transfer has been recorded successfully. You can use the summary below as your booking confirmation.";
+
   const html = `
     <!doctype html>
     <html>
@@ -180,7 +211,7 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
               <div style="font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.8;">XioohTravel</div>
               <h1 style="margin:12px 0 8px;font-size:28px;line-height:1.2;">Payment received</h1>
               <p style="margin:0;font-size:15px;line-height:1.7;opacity:0.92;">
-                Your transfer has been recorded successfully. You can use the summary below as your booking confirmation.
+                ${introText}
               </p>
             </div>
 
@@ -209,8 +240,11 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
   `;
 
   const text = [
-    "XioohTravel payment confirmation",
+    `${usingTestSender ? "[Test Delivery] " : ""}XioohTravel payment confirmation`,
     "",
+    usingTestSender && testRecipient ? `Delivery mode: Test delivery via resend.dev` : null,
+    usingTestSender && testRecipient ? `Test recipient: ${testRecipient}` : null,
+    usingTestSender ? `Original customer email: ${booking.contact_email}` : null,
     `Booking ID: ${booking.id}`,
     "Payment status: Paid",
     `Trip type: ${tripType}`,
@@ -237,7 +271,7 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
 
   const response = await resend.emails.send({
     from,
-    to: booking.contact_email,
+    to: recipientEmail,
     subject,
     html,
     text,
