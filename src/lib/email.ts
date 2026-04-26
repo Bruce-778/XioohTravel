@@ -28,6 +28,29 @@ export type PaymentConfirmationBooking = {
 
 let resendClient: Resend | null = null;
 
+export function maskEmailForLog(email: string) {
+  const normalized = email.trim();
+  const separatorIndex = normalized.indexOf("@");
+
+  if (separatorIndex <= 1) {
+    return "***";
+  }
+
+  return `${normalized.slice(0, 2)}***${normalized.slice(separatorIndex)}`;
+}
+
+export function getPaymentConfirmationEmailDiagnostics() {
+  const from = process.env.BOOKING_EMAIL_FROM?.trim() || null;
+
+  return {
+    hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
+    hasBookingEmailFrom: Boolean(from),
+    hasBookingEmailTestTo: Boolean(process.env.BOOKING_EMAIL_TEST_TO?.trim()),
+    hasAppBaseUrl: Boolean(process.env.APP_BASE_URL),
+    usingResendDevSender: Boolean(from && isResendDevSender(from)),
+  };
+}
+
 function isResendDevSender(from: string) {
   return from.toLowerCase().includes("onboarding@resend.dev");
 }
@@ -130,6 +153,7 @@ function renderRow(label: string, value: string) {
 }
 
 export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfirmationBooking) {
+  const diagnostics = getPaymentConfirmationEmailDiagnostics();
   const resend = getResend();
   const from = getBookingEmailFrom();
   const usingTestSender = isResendDevSender(from);
@@ -140,6 +164,15 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
   }
 
   const recipientEmail = testRecipient ?? booking.contact_email;
+  console.info("[email] Sending booking payment confirmation", {
+    bookingId: booking.id,
+    from,
+    usingTestSender,
+    recipientEmail: maskEmailForLog(recipientEmail),
+    originalCustomerEmail: maskEmailForLog(booking.contact_email),
+    diagnostics,
+  });
+
   const ordersUrl = getOrdersUrl(booking.contact_email);
 
   const tripType = getTripTypeLabel(booking.trip_type);
@@ -281,8 +314,21 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
   });
 
   if (response.error) {
+    console.error("[email] Resend rejected booking payment confirmation", {
+      bookingId: booking.id,
+      recipientEmail: maskEmailForLog(recipientEmail),
+      originalCustomerEmail: maskEmailForLog(booking.contact_email),
+      diagnostics,
+      responseError: response.error,
+    });
     throw new Error(response.error.message || "Failed to send payment confirmation email");
   }
+
+  console.info("[email] Resend accepted booking payment confirmation", {
+    bookingId: booking.id,
+    recipientEmail: maskEmailForLog(recipientEmail),
+    providerId: response.data?.id ?? null,
+  });
 
   return {
     providerId: response.data?.id ?? null,

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { syncBookingPaymentFromCheckoutSession } from "@/lib/bookings";
+import { getPaymentConfirmationEmailDiagnostics } from "@/lib/email";
 import { sendPaymentConfirmationEmailIfNeeded } from "@/lib/paymentConfirmation";
 import { getStripe } from "@/lib/stripe";
 
@@ -22,6 +23,11 @@ export async function POST(req: Request) {
   }
 
   try {
+    console.info("[stripe_webhook] Received event", {
+      eventId: event.id,
+      eventType: event.type,
+    });
+
     if (
       event.type === "checkout.session.completed" ||
       event.type === "checkout.session.async_payment_succeeded"
@@ -29,14 +35,32 @@ export async function POST(req: Request) {
       const session = event.data.object as Stripe.Checkout.Session;
       const bookingId = await syncBookingPaymentFromCheckoutSession(session);
 
+      console.info("[stripe_webhook] Synced booking payment status", {
+        eventId: event.id,
+        bookingId,
+        sessionId: session.id,
+        paymentStatus: session.payment_status,
+      });
+
       if (session.payment_status === "paid") {
-        await sendPaymentConfirmationEmailIfNeeded(bookingId);
+        const emailResult = await sendPaymentConfirmationEmailIfNeeded(bookingId);
+
+        console.info("[stripe_webhook] Payment confirmation email result", {
+          eventId: event.id,
+          bookingId,
+          emailResult,
+        });
       }
     }
 
     return NextResponse.json({ received: true });
   } catch (error: any) {
-    console.error(error);
+    console.error("[stripe_webhook] Handler failed", {
+      eventId: event.id,
+      eventType: event.type,
+      emailDiagnostics: getPaymentConfirmationEmailDiagnostics(),
+      error,
+    });
     return NextResponse.json({ error: error?.message ?? "Webhook handler failed" }, { status: 500 });
   }
 }

@@ -1,6 +1,8 @@
 import type { PoolClient } from "pg";
 import { db } from "@/lib/db";
 import {
+  getPaymentConfirmationEmailDiagnostics,
+  maskEmailForLog,
   sendBookingPaymentConfirmationEmail,
   type PaymentConfirmationBooking,
 } from "@/lib/email";
@@ -54,6 +56,11 @@ export async function sendPaymentConfirmationEmailIfNeeded(bookingId: string) {
   const client = await db.pool.connect();
 
   try {
+    console.info("[payment_confirmation] Checking booking", {
+      bookingId,
+      diagnostics: getPaymentConfirmationEmailDiagnostics(),
+    });
+
     await client.query("BEGIN");
     const booking = await getBookingForPaymentConfirmation(client, bookingId);
 
@@ -62,15 +69,32 @@ export async function sendPaymentConfirmationEmailIfNeeded(bookingId: string) {
     }
 
     if (booking.payment_confirmation_email_sent_at) {
+      console.info("[payment_confirmation] Skipping already-sent booking", {
+        bookingId,
+        sentAt: booking.payment_confirmation_email_sent_at,
+        providerId: booking.payment_confirmation_email_provider_id,
+      });
       await client.query("COMMIT");
       return { sent: false as const, reason: "already_sent" as const };
     }
 
     const isPaid = booking.stripe_payment_status === "paid" || booking.status === "PAID" || booking.status === "CONFIRMED";
     if (!isPaid) {
+      console.info("[payment_confirmation] Skipping unpaid booking", {
+        bookingId,
+        status: booking.status,
+        stripePaymentStatus: booking.stripe_payment_status,
+      });
       await client.query("COMMIT");
       return { sent: false as const, reason: "not_paid" as const };
     }
+
+    console.info("[payment_confirmation] Sending booking payment confirmation", {
+      bookingId,
+      status: booking.status,
+      stripePaymentStatus: booking.stripe_payment_status,
+      contactEmail: maskEmailForLog(booking.contact_email),
+    });
 
     const emailResult = await sendBookingPaymentConfirmationEmail(booking);
 
@@ -84,12 +108,23 @@ export async function sendPaymentConfirmationEmailIfNeeded(bookingId: string) {
     );
 
     await client.query("COMMIT");
+
+    console.info("[payment_confirmation] Marked booking payment confirmation as sent", {
+      bookingId,
+      providerId: emailResult.providerId,
+    });
+
     return {
       sent: true as const,
       providerId: emailResult.providerId,
     };
   } catch (error) {
     await client.query("ROLLBACK");
+    console.error("[payment_confirmation] Failed to send booking payment confirmation", {
+      bookingId,
+      diagnostics: getPaymentConfirmationEmailDiagnostics(),
+      error,
+    });
     throw error;
   } finally {
     client.release();

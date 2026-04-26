@@ -9,7 +9,9 @@
     "lint": "next lint",
     "check:i18n": "tsx scripts/check-i18n.ts",
     "init-db": "tsx scripts/init-db.ts",
+    "inspect:payment-confirmation": "tsx scripts/inspect-payment-confirmation.ts",
     "patch:bookings-payment-columns": "tsx scripts/patch-bookings-payment-columns.ts",
+    "retry:payment-confirmation-email": "tsx scripts/retry-payment-confirmation-email.ts",
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
