@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import dotenv from "dotenv";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 
 dotenv.config();
 
@@ -14,7 +14,7 @@ if (connectionStrings.length === 0) {
 
 async function main() {
   let pool: Pool | null = null;
-  let client = null as Awaited<ReturnType<Pool["connect"]>> | null;
+  let client: PoolClient | null = null;
 
   try {
     let lastError: unknown = null;
