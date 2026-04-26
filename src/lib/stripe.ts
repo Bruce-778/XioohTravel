@@ -73,6 +73,15 @@ export async function createBookingCheckoutSession(input: CreateCheckoutSessionI
       bookingId: input.bookingId,
       contactEmail: input.contactEmail,
     },
+    payment_intent_data: {
+      description: `XioohTravel booking ${input.bookingId} | ${routeLabel} | ${pickupDate} JST`,
+      metadata: {
+        bookingId: input.bookingId,
+        contactEmail: input.contactEmail,
+        pickupLocation: input.pickupLocation,
+        dropoffLocation: input.dropoffLocation,
+      },
+    },
   });
 }
 

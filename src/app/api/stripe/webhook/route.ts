@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { syncBookingPaymentFromCheckoutSession } from "@/lib/bookings";
+import { sendPaymentConfirmationEmailIfNeeded } from "@/lib/paymentConfirmation";
 import { getStripe } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -25,7 +26,12 @@ export async function POST(req: Request) {
       event.type === "checkout.session.completed" ||
       event.type === "checkout.session.async_payment_succeeded"
     ) {
-      await syncBookingPaymentFromCheckoutSession(event.data.object as Stripe.Checkout.Session);
+      const session = event.data.object as Stripe.Checkout.Session;
+      const bookingId = await syncBookingPaymentFromCheckoutSession(session);
+
+      if (session.payment_status === "paid") {
+        await sendPaymentConfirmationEmailIfNeeded(bookingId);
+      }
     }
 
     return NextResponse.json({ received: true });
