@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   flight_note TEXT,
   passengers INTEGER NOT NULL,
   child_seats INTEGER NOT NULL DEFAULT 0,
+  meet_and_greet_sign BOOLEAN NOT NULL DEFAULT FALSE,
   luggage_small INTEGER NOT NULL DEFAULT 0,
   luggage_medium INTEGER NOT NULL DEFAULT 0,
   luggage_large INTEGER NOT NULL DEFAULT 0,
@@ -60,6 +61,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   pricing_night_jpy INTEGER NOT NULL DEFAULT 0,
   pricing_urgent_jpy INTEGER NOT NULL DEFAULT 0,
   pricing_child_seat_jpy INTEGER NOT NULL DEFAULT 0,
+  pricing_meet_and_greet_jpy INTEGER NOT NULL DEFAULT 0,
   pricing_manual_adjustment_jpy INTEGER NOT NULL DEFAULT 0,
   pricing_total_jpy INTEGER NOT NULL,
   pricing_note TEXT,
@@ -131,6 +133,7 @@ ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS flight_date TIMESTAMPTZ;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS flight_note TEXT;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS passengers INTEGER;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS child_seats INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS meet_and_greet_sign BOOLEAN DEFAULT FALSE;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS luggage_small INTEGER DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS luggage_medium INTEGER DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS luggage_large INTEGER DEFAULT 0;
@@ -142,6 +145,7 @@ ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS pricing_base_jpy INTEGER
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS pricing_night_jpy INTEGER DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS pricing_urgent_jpy INTEGER DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS pricing_child_seat_jpy INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS pricing_meet_and_greet_jpy INTEGER DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS pricing_manual_adjustment_jpy INTEGER DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS pricing_total_jpy INTEGER;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS pricing_note TEXT;
@@ -188,12 +192,14 @@ ALTER TABLE IF EXISTS bookings ALTER COLUMN status SET DEFAULT 'PENDING_PAYMENT'
 ALTER TABLE IF EXISTS bookings ALTER COLUMN is_urgent SET DEFAULT FALSE;
 ALTER TABLE IF EXISTS bookings ALTER COLUMN currency SET DEFAULT 'JPY';
 ALTER TABLE IF EXISTS bookings ALTER COLUMN child_seats SET DEFAULT 0;
+ALTER TABLE IF EXISTS bookings ALTER COLUMN meet_and_greet_sign SET DEFAULT FALSE;
 ALTER TABLE IF EXISTS bookings ALTER COLUMN luggage_small SET DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ALTER COLUMN luggage_medium SET DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ALTER COLUMN luggage_large SET DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ALTER COLUMN pricing_night_jpy SET DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ALTER COLUMN pricing_urgent_jpy SET DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ALTER COLUMN pricing_child_seat_jpy SET DEFAULT 0;
+ALTER TABLE IF EXISTS bookings ALTER COLUMN pricing_meet_and_greet_jpy SET DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ALTER COLUMN pricing_manual_adjustment_jpy SET DEFAULT 0;
 ALTER TABLE IF EXISTS bookings ALTER COLUMN stripe_payment_status SET DEFAULT 'unpaid';
 ALTER TABLE IF EXISTS bookings ALTER COLUMN created_at SET DEFAULT NOW();
@@ -242,12 +248,14 @@ SET
   is_urgent = COALESCE(is_urgent, FALSE),
   currency = COALESCE(currency, 'JPY'),
   child_seats = COALESCE(child_seats, 0),
+  meet_and_greet_sign = COALESCE(meet_and_greet_sign, FALSE),
   luggage_small = COALESCE(luggage_small, 0),
   luggage_medium = COALESCE(luggage_medium, 0),
   luggage_large = COALESCE(luggage_large, 0),
   pricing_night_jpy = COALESCE(pricing_night_jpy, 0),
   pricing_urgent_jpy = COALESCE(pricing_urgent_jpy, 0),
   pricing_child_seat_jpy = COALESCE(pricing_child_seat_jpy, 0),
+  pricing_meet_and_greet_jpy = COALESCE(pricing_meet_and_greet_jpy, 0),
   pricing_manual_adjustment_jpy = COALESCE(pricing_manual_adjustment_jpy, 0),
   stripe_payment_status = COALESCE(stripe_payment_status, 'unpaid'),
   created_at = COALESCE(created_at, NOW()),
@@ -257,12 +265,14 @@ WHERE
   OR is_urgent IS NULL
   OR currency IS NULL
   OR child_seats IS NULL
+  OR meet_and_greet_sign IS NULL
   OR luggage_small IS NULL
   OR luggage_medium IS NULL
   OR luggage_large IS NULL
   OR pricing_night_jpy IS NULL
   OR pricing_urgent_jpy IS NULL
   OR pricing_child_seat_jpy IS NULL
+  OR pricing_meet_and_greet_jpy IS NULL
   OR pricing_manual_adjustment_jpy IS NULL
   OR stripe_payment_status IS NULL
   OR created_at IS NULL
@@ -813,6 +823,16 @@ BEGIN
       ALTER TABLE bookings
         ADD CONSTRAINT bookings_pricing_child_seat_nonnegative
         CHECK (pricing_child_seat_jpy IS NULL OR pricing_child_seat_jpy >= 0);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'bookings_pricing_meet_and_greet_nonnegative'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM bookings WHERE pricing_meet_and_greet_jpy IS NOT NULL AND pricing_meet_and_greet_jpy < 0
+    ) THEN
+      ALTER TABLE bookings
+        ADD CONSTRAINT bookings_pricing_meet_and_greet_nonnegative
+        CHECK (pricing_meet_and_greet_jpy IS NULL OR pricing_meet_and_greet_jpy >= 0);
     END IF;
 
     IF NOT EXISTS (

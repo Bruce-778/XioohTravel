@@ -118,6 +118,14 @@ export default async function SuccessPage({
                 <span className="text-slate-500 font-medium">{t("success.pickupTime")}</span>
                 <span className="font-semibold text-slate-900">{formatDateTimeJST(booking.pickup_time, locale)}</span>
               </div>
+              <div className="flex items-center justify-between py-2 border-b border-slate-200">
+                <span className="text-slate-500 font-medium">{t("success.childSeats")}</span>
+                <span className="font-semibold text-slate-900">{booking.child_seats}</span>
+              </div>
+              <div className="flex items-center justify-between py-2 border-b border-slate-200">
+                <span className="text-slate-500 font-medium">{t("success.meetAndGreet")}</span>
+                <span className="font-semibold text-slate-900">{booking.meet_and_greet_sign ? t("common.yes") : t("common.no")}</span>
+              </div>
               <div className="flex flex-col gap-1 py-2 border-b border-slate-200">
                 <span className="text-slate-500 font-medium">{t("success.pickupLocation")}</span>
                 <span className="font-semibold text-slate-900">{getLocalizedLocation(booking.pickup_location, locale)}</span>

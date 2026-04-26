@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     const night = Number(booking.pricing_night_jpy ?? 0);
     const urgent = Number(booking.pricing_urgent_jpy ?? 0);
     const childSeat = Number(booking.pricing_child_seat_jpy ?? 0);
+    const meetAndGreet = Number(booking.pricing_meet_and_greet_jpy ?? 0);
     const currentManual = Number(booking.pricing_manual_adjustment_jpy ?? 0);
 
     const nextManual = manualAdjustmentJpy ?? currentManual;
@@ -38,7 +39,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: t("api.paidBookingLocked") }, { status: 400 });
     }
 
-    const nextTotal = base + night + urgent + childSeat + nextManual;
+    const nextTotal = base + night + urgent + childSeat + meetAndGreet + nextManual;
 
     await db.query(
       `UPDATE bookings SET status = $1, pricing_manual_adjustment_jpy = $2, pricing_total_jpy = $3, pricing_note = $4, updated_at = NOW()

@@ -2,7 +2,12 @@ import { randomInt } from "node:crypto";
 import type Stripe from "stripe";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { computeNightFee, isUrgentOrder, CHILD_SEAT_FEE_JPY } from "@/lib/bookingRules";
+import {
+  computeNightFee,
+  isUrgentOrder,
+  CHILD_SEAT_FEE_JPY,
+  MEET_AND_GREET_SIGN_FEE_JPY,
+} from "@/lib/bookingRules";
 import { getPricingAreaCode } from "@/lib/locationData";
 import { CreateBookingSchema } from "@/lib/validators";
 
@@ -39,11 +44,30 @@ type BookingRow = {
   pickup_time: Date;
   pickup_location: string;
   dropoff_location: string;
+  child_seats: number;
+  meet_and_greet_sign: boolean;
+  pricing_base_jpy: number;
+  pricing_night_jpy: number;
+  pricing_urgent_jpy: number;
+  pricing_child_seat_jpy: number;
+  pricing_meet_and_greet_jpy: number;
+  pricing_manual_adjustment_jpy: number;
   pricing_total_jpy: number;
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
   stripe_payment_status: string | null;
   vehicle_name?: string;
+};
+
+export type BookingSnapshot = {
+  pickupTime: Date;
+  isUrgent: boolean;
+  base: number;
+  night: number;
+  urgent: number;
+  childSeat: number;
+  meetAndGreet: number;
+  total: number;
 };
 
 const MAX_BOOKING_ID_RETRIES = 5;
@@ -114,7 +138,8 @@ export async function calculateBookingSnapshot(data: CreateBookingInput) {
   const night = isNight ? Number(rule.night_fee_jpy ?? 0) : 0;
   const urgent = isUrgent ? Number(rule.urgent_fee_jpy ?? 0) : 0;
   const childSeat = (data.childSeats || 0) * CHILD_SEAT_FEE_JPY;
-  const total = base + night + urgent + childSeat;
+  const meetAndGreet = data.meetAndGreetSign ? MEET_AND_GREET_SIGN_FEE_JPY : 0;
+  const total = base + night + urgent + childSeat + meetAndGreet;
 
   return {
     pickupTime,
@@ -123,8 +148,9 @@ export async function calculateBookingSnapshot(data: CreateBookingInput) {
     night,
     urgent,
     childSeat,
+    meetAndGreet,
     total,
-  };
+  } satisfies BookingSnapshot;
 }
 
 export async function createPendingBooking(data: CreateBookingInput) {
@@ -138,19 +164,19 @@ export async function createPendingBooking(data: CreateBookingInput) {
       await db.query(
         `INSERT INTO bookings (
           id, status, trip_type, pickup_time, pickup_location, dropoff_location,
-          flight_number, flight_note, passengers, child_seats,
+          flight_number, flight_note, passengers, child_seats, meet_and_greet_sign,
           luggage_small, luggage_medium, luggage_large,
           contact_name, contact_phone, contact_email, contact_note,
           vehicle_type_id, is_urgent, pricing_base_jpy, pricing_night_jpy,
-          pricing_urgent_jpy, pricing_child_seat_jpy, pricing_total_jpy,
+          pricing_urgent_jpy, pricing_child_seat_jpy, pricing_meet_and_greet_jpy, pricing_total_jpy,
           stripe_payment_status
         ) VALUES (
           $1, 'PENDING_PAYMENT', $2, $3, $4, $5,
-          $6, $7, $8, $9,
-          $10, $11, $12,
-          $13, $14, $15, $16,
-          $17, $18, $19, $20,
-          $21, $22, $23,
+          $6, $7, $8, $9, $10,
+          $11, $12, $13,
+          $14, $15, $16, $17,
+          $18, $19, $20, $21,
+          $22, $23, $24, $25,
           'unpaid'
         )`,
         [
@@ -163,6 +189,7 @@ export async function createPendingBooking(data: CreateBookingInput) {
           data.flightNote,
           data.passengers,
           data.childSeats,
+          data.meetAndGreetSign,
           data.luggageSmall,
           data.luggageMedium,
           data.luggageLarge,
@@ -176,6 +203,7 @@ export async function createPendingBooking(data: CreateBookingInput) {
           snapshot.night,
           snapshot.urgent,
           snapshot.childSeat,
+          snapshot.meetAndGreet,
           snapshot.total,
         ]
       );

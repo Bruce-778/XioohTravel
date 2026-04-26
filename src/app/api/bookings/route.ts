@@ -30,6 +30,13 @@ export async function POST(req: Request) {
     const checkoutSession = await createBookingCheckoutSession({
       bookingId: created.bookingId,
       contactEmail: data.contactEmail,
+      baseJpy: created.snapshot.base,
+      nightJpy: created.snapshot.night,
+      urgentJpy: created.snapshot.urgent,
+      childSeats: data.childSeats,
+      childSeatTotalJpy: created.snapshot.childSeat,
+      meetAndGreetSign: data.meetAndGreetSign,
+      meetAndGreetTotalJpy: created.snapshot.meetAndGreet,
       totalJpy: created.snapshot.total,
       pickupLocation: data.pickupLocation,
       dropoffLocation: data.dropoffLocation,

@@ -13,6 +13,7 @@ export type PaymentConfirmationBooking = {
   flight_note: string | null;
   passengers: number;
   child_seats: number;
+  meet_and_greet_sign: boolean;
   luggage_small: number;
   luggage_medium: number;
   luggage_large: number;
@@ -20,6 +21,7 @@ export type PaymentConfirmationBooking = {
   contact_phone: string;
   contact_email: string;
   contact_note: string | null;
+  pricing_meet_and_greet_jpy: number;
   pricing_total_jpy: number;
   stripe_payment_intent_id: string | null;
   paid_at: Date | string | null;
@@ -323,9 +325,18 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
     renderRow("Email", booking.contact_email),
     renderRow("Passengers", String(booking.passengers)),
     renderRow("Child seats", String(booking.child_seats)),
+    renderRow("Meet-and-greet sign", booking.meet_and_greet_sign ? "Yes" : "No"),
     renderRow("Luggage", luggage),
     renderRow("Total paid", totalPaid),
   ];
+
+  if (Number(booking.pricing_meet_and_greet_jpy ?? 0) > 0) {
+    details.splice(
+      14,
+      0,
+      renderRow("Meet-and-greet fee", formatCurrencyJpy(Number(booking.pricing_meet_and_greet_jpy ?? 0)))
+    );
+  }
 
   if (usingTestSender && testRecipient) {
     details.splice(
@@ -413,6 +424,10 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
     `Email: ${booking.contact_email}`,
     `Passengers: ${booking.passengers}`,
     `Child seats: ${booking.child_seats}`,
+    `Meet-and-greet sign: ${booking.meet_and_greet_sign ? "Yes" : "No"}`,
+    Number(booking.pricing_meet_and_greet_jpy ?? 0) > 0
+      ? `Meet-and-greet fee: ${formatCurrencyJpy(Number(booking.pricing_meet_and_greet_jpy ?? 0))}`
+      : null,
     `Luggage: ${luggage}`,
     `Total paid: ${totalPaid}`,
     booking.flight_number ? `Flight number: ${booking.flight_number}` : null,

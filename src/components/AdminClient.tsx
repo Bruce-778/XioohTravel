@@ -43,6 +43,7 @@ type AdminRow = {
   vehicleTypeId: string | null;
   passengers: number;
   childSeats: number;
+  meetAndGreetSign: boolean;
   luggageSmall: number;
   luggageMedium: number;
   luggageLarge: number;
@@ -56,6 +57,7 @@ type AdminRow = {
   pricingNightJpy: number;
   pricingUrgentJpy: number;
   pricingChildSeatJpy: number;
+  pricingMeetAndGreetJpy: number;
   totalJpy: number;
   pricingManualAdjustmentJpy: number;
   pricingNote: string | null;
@@ -173,6 +175,7 @@ type Labels = {
   flightNote: string;
   passengersCount: string;
   childSeats: string;
+  meetAndGreet: string;
   luggageSmall: string;
   luggageMedium: string;
   luggageLarge: string;
@@ -184,12 +187,15 @@ type Labels = {
   pricingNight: string;
   pricingUrgent: string;
   pricingChildSeat: string;
+  pricingMeetAndGreet: string;
   pricingManualAdjustment: string;
   pricingNoteValue: string;
   createdAt: string;
   cancelledAt: string;
   cancelReasonValue: string;
   notProvided: string;
+  yes: string;
+  no: string;
   pricingRuleNotFound: string;
   vehicleTypeNotFound: string;
   loadFailed: string;
@@ -967,6 +973,10 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                                     <div className="font-medium text-slate-900">{r.childSeats}</div>
                                   </div>
                                   <div>
+                                    <div className="text-xs text-slate-500">{labels.meetAndGreet}</div>
+                                    <div className="font-medium text-slate-900">{r.meetAndGreetSign ? labels.yes : labels.no}</div>
+                                  </div>
+                                  <div>
                                     <div className="text-xs text-slate-500">{labels.luggageSmall}</div>
                                     <div className="font-medium text-slate-900">{r.luggageSmall}</div>
                                   </div>
@@ -1025,6 +1035,10 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                                   <div>
                                     <div className="text-xs text-slate-500">{labels.pricingChildSeat}</div>
                                     <div className="font-medium text-slate-900">{formatMoneyFromJpy(r.pricingChildSeatJpy, currency, locale)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.pricingMeetAndGreet}</div>
+                                    <div className="font-medium text-slate-900">{formatMoneyFromJpy(r.pricingMeetAndGreetJpy, currency, locale)}</div>
                                   </div>
                                   <div>
                                     <div className="text-xs text-slate-500">{labels.pricingManualAdjustment}</div>

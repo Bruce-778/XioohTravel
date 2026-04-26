@@ -54,6 +54,8 @@ export async function GET(req: Request) {
     "Contact Phone",
     "Passengers",
     "Child Seats",
+    "Meet & Greet Sign",
+    "Meet & Greet Fee (JPY)",
     "Total (JPY)",
     "Manual Adjustment (JPY)",
     "Note"
@@ -71,6 +73,8 @@ export async function GET(req: Request) {
     `'${b.contact_phone}`, // Use ' to prevent Excel from formatting as number
     b.passengers,
     b.child_seats,
+    b.meet_and_greet_sign ? "Yes" : "No",
+    b.pricing_meet_and_greet_jpy,
     b.pricing_total_jpy,
     b.pricing_manual_adjustment_jpy,
     b.pricing_note || ""

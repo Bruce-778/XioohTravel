@@ -28,6 +28,7 @@ type BookingRow = {
   flightNote: string | null;
   passengers: number;
   childSeats: number;
+  meetAndGreetSign: boolean;
   luggageSmall: number;
   luggageMedium: number;
   luggageLarge: number;
@@ -41,6 +42,7 @@ type BookingRow = {
   pricingNightJpy: number;
   pricingUrgentJpy: number;
   pricingChildSeatJpy: number;
+  pricingMeetAndGreetJpy: number;
   pricingManualAdjustmentJpy: number;
   pricingNote: string | null;
   cancelReason: string | null;
@@ -103,6 +105,7 @@ type Labels = {
   flightNote: string;
   passengersCount: string;
   childSeats: string;
+  meetAndGreet: string;
   luggageSmall: string;
   luggageMedium: string;
   luggageLarge: string;
@@ -114,12 +117,15 @@ type Labels = {
   pricingNight: string;
   pricingUrgent: string;
   pricingChildSeat: string;
+  pricingMeetAndGreet: string;
   pricingManualAdjustment: string;
   pricingNote: string;
   createdAt: string;
   cancelledAt: string;
   cancelReasonValue: string;
   notProvided: string;
+  yes: string;
+  no: string;
   tripTypes: Record<string, string>;
 };
 
@@ -497,6 +503,12 @@ export function OrdersClient({
                                     <dd className="font-medium text-slate-900 text-right">{row.childSeats}</dd>
                                   </div>
                                   <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.meetAndGreet}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">
+                                      {row.meetAndGreetSign ? labels.yes : labels.no}
+                                    </dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
                                     <dt className="text-slate-500">{labels.luggageSmall}</dt>
                                     <dd className="font-medium text-slate-900 text-right">{row.luggageSmall}</dd>
                                   </div>
@@ -559,6 +571,10 @@ export function OrdersClient({
                                   <div className="flex justify-between gap-4">
                                     <dt className="text-slate-500">{labels.pricingChildSeat}</dt>
                                     <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingChildSeatJpy, currency, locale)}</dd>
+                                  </div>
+                                  <div className="flex justify-between gap-4">
+                                    <dt className="text-slate-500">{labels.pricingMeetAndGreet}</dt>
+                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingMeetAndGreetJpy, currency, locale)}</dd>
                                   </div>
                                   <div className="flex justify-between gap-4">
                                     <dt className="text-slate-500">{labels.pricingManualAdjustment}</dt>

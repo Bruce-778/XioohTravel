@@ -21,6 +21,7 @@ export const CreateBookingSchema = z.object({
   dropoffLocation: z.string().min(2),
   passengers: z.coerce.number().int().min(1).max(50),
   childSeats: z.coerce.number().int().min(0).max(10).default(0),
+  meetAndGreetSign: z.coerce.boolean().default(false),
   luggageSmall: z.coerce.number().int().min(0).max(20).default(0),
   luggageMedium: z.coerce.number().int().min(0).max(20).default(0),
   luggageLarge: z.coerce.number().int().min(0).max(20).default(0),
@@ -70,4 +71,3 @@ export const AdminPricingRuleSchema = z.object({
   nightFeeJpy: z.coerce.number().int().min(0).max(100000).optional(),
   urgentFeeJpy: z.coerce.number().int().min(0).max(100000).optional()
 });
-
