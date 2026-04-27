@@ -1,11 +1,62 @@
-import Link from "next/link";
 import { SearchForm } from "@/components/SearchForm";
 import { AuthLink } from "@/components/AuthLink";
+import { HomeFaqSection } from "@/components/HomeFaqSection";
+import { HomePromoCarousel } from "@/components/HomePromoCarousel";
 import { HomeTrustSection } from "@/components/HomeTrustSection";
 import { getT } from "@/lib/i18n";
 
 export default async function HomePage() {
   const { t, locale } = await getT();
+  const promoSlides = [
+    {
+      id: "tokyo",
+      title: t("home.promo.tokyo.title"),
+      desc: t("home.promo.tokyo.desc"),
+      imageSrc: "/home-promo/tokyo-coverpage.png",
+      alt: t("home.promo.tokyo.alt"),
+    },
+    {
+      id: "kyoto",
+      title: t("home.promo.kyoto.title"),
+      desc: t("home.promo.kyoto.desc"),
+      imageSrc: "/home-promo/kyoto-coverpage.png",
+      alt: t("home.promo.kyoto.alt"),
+    },
+    {
+      id: "osaka",
+      title: t("home.promo.osaka.title"),
+      desc: t("home.promo.osaka.desc"),
+      imageSrc: "/home-promo/osaka-coverpage.png",
+      alt: t("home.promo.osaka.alt"),
+    },
+  ];
+  const faqItems = [
+    {
+      id: "book-for-others",
+      question: t("home.faq.items.bookForOthers.question"),
+      answer: t("home.faq.items.bookForOthers.answer"),
+    },
+    {
+      id: "round-trip",
+      question: t("home.faq.items.roundTrip.question"),
+      answer: t("home.faq.items.roundTrip.answer"),
+    },
+    {
+      id: "luggage",
+      question: t("home.faq.items.luggage.question"),
+      answer: t("home.faq.items.luggage.answer"),
+    },
+    {
+      id: "flight-change",
+      question: t("home.faq.items.flightChange.question"),
+      answer: t("home.faq.items.flightChange.answer"),
+    },
+    {
+      id: "find-driver",
+      question: t("home.faq.items.findDriver.question"),
+      answer: t("home.faq.items.findDriver.answer"),
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-50 via-white to-blue-50/50">
@@ -127,7 +178,24 @@ export default async function HomePage() {
         </div>
       </div>
 
+      <HomePromoCarousel
+        eyebrow={t("home.promo.eyebrow")}
+        title={t("home.promo.title")}
+        subtitle={t("home.promo.subtitle")}
+        cta={t("home.promo.cta")}
+        labels={{
+          previous: t("home.promo.previous"),
+          next: t("home.promo.next"),
+          goTo: t("home.promo.goTo"),
+        }}
+        slides={promoSlides}
+      />
       <HomeTrustSection />
+      <HomeFaqSection
+        title={t("home.faq.title")}
+        subtitle={t("home.faq.subtitle")}
+        items={faqItems}
+      />
     </div>
   );
 }
