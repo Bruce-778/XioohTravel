@@ -20,6 +20,7 @@ type LoginLabels = {
   testMode: string;
   testCode: string;
   testVisible: string;
+  inboxHint: string;
   emailPlaceholder: string;
   codePlaceholder: string;
 };
@@ -120,9 +121,10 @@ export function LoginClient({ labels }: LoginClientProps) {
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <h1 className="mb-2 text-2xl font-bold text-slate-900">{labels.title}</h1>
-        <p className="mb-8 text-slate-500">
-          {step === "email" ? labels.emailHint : `${labels.codeHint} ${email}`}
-        </p>
+        <div className="mb-8 space-y-2 text-slate-500">
+          <p>{step === "email" ? labels.emailHint : `${labels.codeHint} ${email}`}</p>
+          {step === "code" ? <p className="text-sm">{labels.inboxHint}</p> : null}
+        </div>
 
         {error ? (
           <div className="mb-6 rounded-lg border border-red-100 bg-red-50 p-4 text-sm text-red-600">

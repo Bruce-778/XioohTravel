@@ -24,6 +24,7 @@ export default async function LoginPage() {
         testMode: t("auth.testMode"),
         testCode: t("auth.testCode"),
         testVisible: t("auth.testVisible"),
+        inboxHint: t("auth.inboxHint"),
         emailPlaceholder: t("auth.emailPlaceholder"),
         codePlaceholder: t("auth.codePlaceholder"),
       }}

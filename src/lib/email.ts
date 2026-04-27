@@ -2,6 +2,12 @@ import https from "node:https";
 import { formatDateTimeJST } from "@/lib/timeFormat";
 import { getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
 
+type AuthVerificationEmailParams = {
+  email: string;
+  code: string;
+  expiresInMinutes: number;
+};
+
 export type PaymentConfirmationBooking = {
   id: string;
   status: string;
@@ -60,14 +66,26 @@ type ResendLikeError = {
   message?: string;
 };
 
+type ResendRequestError = Error & {
+  code?: string;
+};
+
 function sleep(ms: number) {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
 }
 
+export function normalizeEmailAddress(email: string) {
+  return email.trim().toLowerCase();
+}
+
 function buildPaymentConfirmationIdempotencyKey(bookingId: string) {
   return `payment-confirmation-${bookingId}`;
+}
+
+function buildAuthVerificationIdempotencyKey(email: string, code: string) {
+  return `auth-verification-${normalizeEmailAddress(email)}-${code}`;
 }
 
 function shouldRetryResendError(error: ResendLikeError | null | undefined) {
@@ -104,6 +122,15 @@ function getBookingEmailTestTo() {
   return process.env.BOOKING_EMAIL_TEST_TO?.trim() || null;
 }
 
+function getAuthEmailTestTo() {
+  const testRecipient = process.env.AUTH_EMAIL_TEST_TO?.trim();
+  return testRecipient ? normalizeEmailAddress(testRecipient) : null;
+}
+
+function getBookingEmailReplyTo() {
+  return process.env.BOOKING_EMAIL_REPLY_TO?.trim() || null;
+}
+
 function getOrdersUrl(email: string) {
   if (!process.env.APP_BASE_URL) {
     throw new Error("APP_BASE_URL is not configured");
@@ -120,6 +147,23 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function createRequestError(code: string, message: string) {
+  const error = new Error(message) as ResendRequestError;
+  error.code = code;
+  return error;
+}
+
+export function getAuthVerificationEmailDiagnostics() {
+  const from = process.env.BOOKING_EMAIL_FROM?.trim() || null;
+
+  return {
+    hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
+    hasBookingEmailFrom: Boolean(from),
+    hasAuthEmailTestTo: Boolean(process.env.AUTH_EMAIL_TEST_TO?.trim()),
+    usingResendDevSender: Boolean(from && isResendDevSender(from)),
+  };
 }
 
 function formatCurrencyJpy(amount: number) {
@@ -276,6 +320,149 @@ async function sendResendEmailRequest(payload: ResendEmailPayload, idempotencyKe
   });
 }
 
+export async function sendAuthVerificationCodeEmail({
+  email,
+  code,
+  expiresInMinutes,
+}: AuthVerificationEmailParams) {
+  const diagnostics = getAuthVerificationEmailDiagnostics();
+  const from = getBookingEmailFrom();
+  const normalizedEmail = normalizeEmailAddress(email);
+  const usingTestSender = isResendDevSender(from);
+  const configuredTestRecipient = usingTestSender ? getAuthEmailTestTo() : null;
+
+  if (usingTestSender && !configuredTestRecipient) {
+    throw createRequestError(
+      "AUTH_EMAIL_TEST_TO_MISSING",
+      "AUTH_EMAIL_TEST_TO is required when using onboarding@resend.dev"
+    );
+  }
+
+  if (usingTestSender && configuredTestRecipient !== normalizedEmail) {
+    throw createRequestError(
+      "AUTH_EMAIL_TEST_ONLY",
+      "Authentication email testing is limited to the configured test inbox."
+    );
+  }
+
+  const recipientEmail = configuredTestRecipient ?? normalizedEmail;
+  const idempotencyKey = buildAuthVerificationIdempotencyKey(normalizedEmail, code);
+  const subjectPrefix = usingTestSender ? "[Test Delivery] " : "";
+  const subject = `${subjectPrefix}Your XioohTravel verification code`;
+  const introText = usingTestSender
+    ? `This is a test delivery for login verification. Because the sender is onboarding@resend.dev, verification emails are limited to the configured test inbox.`
+    : "Use the verification code below to complete your XioohTravel login.";
+  const replyTo = getBookingEmailReplyTo();
+
+  console.info("[email] Sending auth verification code", {
+    recipientEmail: maskEmailForLog(recipientEmail),
+    requestedEmail: maskEmailForLog(normalizedEmail),
+    usingTestSender,
+    idempotencyKey,
+    diagnostics,
+  });
+
+  const html = `
+    <!doctype html>
+    <html>
+      <body style="margin:0;background:#f8fafc;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+        <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
+          <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;overflow:hidden;">
+            <div style="padding:32px;background:linear-gradient(135deg,#0f172a 0%,#2563eb 100%);color:#ffffff;">
+              <div style="font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.8;">XioohTravel</div>
+              <h1 style="margin:12px 0 8px;font-size:28px;line-height:1.2;">Your verification code</h1>
+              <p style="margin:0;font-size:15px;line-height:1.7;opacity:0.92;">${escapeHtml(introText)}</p>
+            </div>
+
+            <div style="padding:32px;">
+              <div style="margin-bottom:24px;font-size:14px;line-height:1.7;color:#475569;">
+                Enter this code on the login page within ${escapeHtml(String(expiresInMinutes))} minutes.
+              </div>
+
+              <div style="margin-bottom:28px;border-radius:20px;border:1px solid #bfdbfe;background:#eff6ff;padding:24px;text-align:center;">
+                <div style="font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:#1d4ed8;">Verification code</div>
+                <div style="margin-top:12px;font-size:36px;font-weight:800;letter-spacing:0.3em;color:#0f172a;">${escapeHtml(code)}</div>
+              </div>
+
+              <table style="width:100%;border-collapse:collapse;">
+                ${renderRow("Requested email", normalizedEmail)}
+                ${usingTestSender ? renderRow("Delivery mode", "Test delivery via resend.dev") : ""}
+                ${usingTestSender && configuredTestRecipient ? renderRow("Test inbox", configuredTestRecipient) : ""}
+                ${renderRow("Valid for", `${expiresInMinutes} minutes`)}
+              </table>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = [
+    `${subjectPrefix}XioohTravel verification code`,
+    "",
+    usingTestSender ? "Delivery mode: Test delivery via resend.dev" : null,
+    usingTestSender && configuredTestRecipient ? `Test inbox: ${configuredTestRecipient}` : null,
+    `Requested email: ${normalizedEmail}`,
+    `Verification code: ${code}`,
+    `Valid for: ${expiresInMinutes} minutes`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const emailPayload: ResendEmailPayload = {
+    from,
+    to: recipientEmail,
+    subject,
+    html,
+    text,
+    ...(replyTo ? { replyTo } : {}),
+  };
+
+  for (let attempt = 1; attempt <= PAYMENT_CONFIRMATION_EMAIL_MAX_ATTEMPTS; attempt += 1) {
+    const response = await sendResendEmailRequest(emailPayload, idempotencyKey);
+
+    if (!response.error) {
+      console.info("[email] Resend accepted auth verification code", {
+        recipientEmail: maskEmailForLog(recipientEmail),
+        providerId: response.data?.id ?? null,
+        attempt,
+      });
+
+      return {
+        providerId: response.data?.id ?? null,
+      };
+    }
+
+    const retryable = shouldRetryResendError(response.error);
+    console.error("[email] Resend rejected auth verification code", {
+      recipientEmail: maskEmailForLog(recipientEmail),
+      requestedEmail: maskEmailForLog(normalizedEmail),
+      diagnostics,
+      responseError: response.error,
+      attempt,
+      retryable,
+    });
+
+    if (!retryable || attempt >= PAYMENT_CONFIRMATION_EMAIL_MAX_ATTEMPTS) {
+      throw new Error(response.error.message || "Failed to send verification code email");
+    }
+
+    const delayMs =
+      PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS[attempt - 1] ??
+      PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS[PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS.length - 1] ??
+      1000;
+    console.warn("[email] Retrying auth verification code", {
+      attempt,
+      nextAttempt: attempt + 1,
+      delayMs,
+      recipientEmail: maskEmailForLog(recipientEmail),
+    });
+    await sleep(delayMs);
+  }
+
+  throw new Error("Failed to send verification code email");
+}
+
 export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfirmationBooking) {
   const diagnostics = getPaymentConfirmationEmailDiagnostics();
   const from = getBookingEmailFrom();
@@ -310,6 +497,7 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
   const totalPaid = formatCurrencyJpy(Number(booking.pricing_total_jpy ?? 0));
   const subjectPrefix = usingTestSender ? "[Test Delivery] " : "";
   const subject = `${subjectPrefix}Payment confirmed - XioohTravel booking ${booking.id}`;
+  const replyTo = getBookingEmailReplyTo();
 
   const details = [
     renderRow("Booking ID", booking.id),
@@ -446,9 +634,7 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
     subject,
     html,
     text,
-    ...(process.env.BOOKING_EMAIL_REPLY_TO
-      ? { replyTo: process.env.BOOKING_EMAIL_REPLY_TO }
-      : {}),
+    ...(replyTo ? { replyTo } : {}),
   };
 
   for (let attempt = 1; attempt <= PAYMENT_CONFIRMATION_EMAIL_MAX_ATTEMPTS; attempt += 1) {
