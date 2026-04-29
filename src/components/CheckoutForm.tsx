@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatMoneyFromJpy } from "@/lib/currencyClient";
 import type { Currency } from "@/lib/currency";
 import {
@@ -9,7 +9,10 @@ import {
 } from "@/lib/bookingRules";
 import {
   PHONE_COUNTRY_CODE_OPTIONS,
+  getCompactPhoneCountryLabel,
+  getFlagEmoji,
   getPhoneCountryLabel,
+  getPhoneCountryName,
 } from "@/lib/phoneCountryCodes";
 import { LocationSelector } from "./LocationSelector";
 
@@ -40,7 +43,6 @@ type Summary = {
 
 type Labels = {
   flightNumber: string;
-  flightNote: string;
   pickupLocation: string;
   dropoffLocation: string;
   contactName: string;
@@ -48,8 +50,13 @@ type Labels = {
   contactEmail: string;
   special: string;
   summary: string;
+  itinerarySummary: string;
+  transferDetails: string;
+  contactInformation: string;
+  specialRequests: string;
   tripType: string;
   pickupTime: string;
+  passengers: string;
   vehicle: string;
   basePrice: string;
   nightFee: string;
@@ -70,7 +77,6 @@ type Labels = {
   agree: string;
   orderFailed: string;
   placeholderFlight: string;
-  placeholderFlightNote: string;
   placeholderName: string;
   placeholderPhone: string;
   placeholderPhoneLocal: string;
@@ -99,9 +105,62 @@ function Field({
 }) {
   return (
     <label className="text-sm block">
-      <div className="text-slate-700 mb-1">{label}</div>
+      <div className="mb-1.5 font-semibold text-slate-900">{label}</div>
       {children}
     </label>
+  );
+}
+
+function FormSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="border-b border-slate-100 pb-3">
+        <h2 className="text-base font-bold text-slate-900">{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3 text-sm items-start">
+      <span className="text-slate-500">{label}</span>
+      <span className="text-right font-medium text-slate-900 break-words">{value}</span>
+    </div>
+  );
+}
+
+function SummarySectionHeader({
+  title,
+  toneClassName,
+  icon,
+}: {
+  title: string;
+  toneClassName: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border bg-white shadow-sm ${toneClassName}`}
+      >
+        {icon}
+      </div>
+      <h2 className="font-bold text-slate-900">{title}</h2>
+    </div>
   );
 }
 
@@ -133,9 +192,10 @@ export function CheckoutForm({
   const [pickupLocation, setPickupLocation] = useState(preset.defaultPickupLocation);
   const [dropoffLocation, setDropoffLocation] = useState(preset.defaultDropoffLocation);
   const [flightNumber, setFlightNumber] = useState("");
-  const [flightNote, setFlightNote] = useState("");
   const [contactName, setContactName] = useState("");
   const [phoneCountryCode, setPhoneCountryCode] = useState("");
+  const [phoneCountryRegionCode, setPhoneCountryRegionCode] = useState("");
+  const [isPhoneCountryMenuOpen, setIsPhoneCountryMenuOpen] = useState(false);
   const [phoneLocalNumber, setPhoneLocalNumber] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactNote, setContactNote] = useState("");
@@ -143,15 +203,56 @@ export function CheckoutForm({
   const [meetAndGreetSign, setMeetAndGreetSign] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const phoneFieldRef = useRef<HTMLDivElement>(null);
+  const phoneLocalInputRef = useRef<HTMLInputElement>(null);
 
   const phoneCountryOptions = useMemo(() => {
     const localeTag = locale.startsWith("zh") ? "zh-CN" : "en";
 
     return PHONE_COUNTRY_CODE_OPTIONS.map((option) => ({
       ...option,
+      countryName: getPhoneCountryName(option.regionCode, localeTag),
       label: getPhoneCountryLabel(option.regionCode, option.dialCode, localeTag),
-    })).sort((left, right) => left.label.localeCompare(right.label, localeTag));
+      fullLabel: `${getFlagEmoji(option.regionCode)} ${getPhoneCountryLabel(
+        option.regionCode,
+        option.dialCode,
+        localeTag
+      )}`,
+      displayLabel: getCompactPhoneCountryLabel(option.regionCode, option.dialCode),
+      selectValue: `${option.regionCode}::${option.dialCode}`,
+    })).sort((left, right) => left.countryName.localeCompare(right.countryName, localeTag));
   }, [locale]);
+
+  const selectedPhoneCountryOption = useMemo(
+    () =>
+      phoneCountryOptions.find(
+        (option) =>
+          option.regionCode === phoneCountryRegionCode && option.dialCode === phoneCountryCode
+      ) ?? null,
+    [phoneCountryCode, phoneCountryOptions, phoneCountryRegionCode]
+  );
+
+  useEffect(() => {
+    function handlePhoneCountryOutsideClick(event: MouseEvent) {
+      if (!phoneFieldRef.current?.contains(event.target as Node)) {
+        setIsPhoneCountryMenuOpen(false);
+      }
+    }
+
+    function handlePhoneCountryEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsPhoneCountryMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePhoneCountryOutsideClick);
+    document.addEventListener("keydown", handlePhoneCountryEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePhoneCountryOutsideClick);
+      document.removeEventListener("keydown", handlePhoneCountryEscape);
+    };
+  }, []);
 
   const pricing = useMemo(() => {
     const childSeatJpy = childSeats * CHILD_SEAT_FEE_JPY;
@@ -186,7 +287,6 @@ export function CheckoutForm({
       luggageLarge: preset.luggageLarge,
       vehicleTypeId: preset.vehicleTypeId,
       flightNumber: flightNumber.trim() || undefined,
-      flightNote: flightNote.trim() || undefined,
       contactName: contactName.trim(),
       contactPhone: buildContactPhone(phoneCountryCode, phoneLocalNumber),
       contactEmail: contactEmail.trim(),
@@ -207,9 +307,9 @@ export function CheckoutForm({
       childSeats,
       meetAndGreetSign,
       flightNumber,
-      flightNote,
       contactName,
       phoneCountryCode,
+      phoneCountryRegionCode,
       phoneLocalNumber,
       contactEmail,
       contactNote,
@@ -220,6 +320,16 @@ export function CheckoutForm({
     if (error) {
       setError(null);
     }
+  }
+
+  function handlePhoneCountrySelect(regionCode: string, dialCode: string) {
+    clearError();
+    setPhoneCountryRegionCode(regionCode);
+    setPhoneCountryCode(dialCode);
+    setIsPhoneCountryMenuOpen(false);
+    window.requestAnimationFrame(() => {
+      phoneLocalInputRef.current?.focus();
+    });
   }
 
   function validatePayload() {
@@ -287,7 +397,7 @@ export function CheckoutForm({
           }
         }}
       >
-        <div className="grid md:grid-cols-2 gap-3">
+        <FormSection title={labels.transferDetails}>
           <Field label={labels.flightNumber}>
             <input
               className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
@@ -300,20 +410,7 @@ export function CheckoutForm({
               required={preset.tripType === "PICKUP"}
             />
           </Field>
-          <Field label={labels.flightNote}>
-            <input
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-              value={flightNote}
-              onChange={(e) => {
-                clearError();
-                setFlightNote(e.target.value);
-              }}
-              placeholder={labels.placeholderFlightNote}
-            />
-          </Field>
-        </div>
 
-        <div className="grid md:grid-cols-2 gap-3">
           <LocationSelector
             value={pickupLocation}
             onChange={(value) => {
@@ -326,6 +423,7 @@ export function CheckoutForm({
             locale={locale}
             tip={labels.locationTip}
           />
+
           <LocationSelector
             value={dropoffLocation}
             onChange={(value) => {
@@ -338,57 +436,51 @@ export function CheckoutForm({
             locale={locale}
             tip={labels.locationTip}
           />
-        </div>
+        </FormSection>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">{labels.addOns}</h2>
-          </div>
+        <FormSection title={labels.addOns}>
+          <Field label={labels.childSeatFee}>
+            <div className="space-y-2">
+              <input
+                type="number"
+                min={0}
+                max={10}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
+                value={childSeats}
+                onChange={(e) => {
+                  clearError();
+                  setChildSeats(clampCount(e.target.value, 10));
+                }}
+              />
+              <div className="text-xs text-slate-500">
+                {formatMoneyFromJpy(CHILD_SEAT_FEE_JPY, "JPY", locale)} / {labels.perSeat}
+              </div>
+            </div>
+          </Field>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label={labels.childSeatFee}>
-              <div className="space-y-2">
-                <input
-                  type="number"
-                  min={0}
-                  max={10}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                  value={childSeats}
-                  onChange={(e) => {
-                    clearError();
-                    setChildSeats(clampCount(e.target.value, 10));
-                  }}
-                />
-                <div className="text-xs text-slate-500">
-                  {formatMoneyFromJpy(CHILD_SEAT_FEE_JPY, "JPY", locale)} / {labels.perSeat}
+          <div className="text-sm block">
+            <div className="mb-1.5 font-semibold text-slate-900">{labels.meetAndGreet}</div>
+            <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div>
+                <div className="font-medium text-slate-900">{labels.meetAndGreetFee}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {formatMoneyFromJpy(MEET_AND_GREET_SIGN_FEE_JPY, "JPY", locale)} / {labels.perOrder}
                 </div>
               </div>
-            </Field>
-
-            <div className="text-sm block">
-              <div className="text-slate-700 mb-1">{labels.meetAndGreet}</div>
-              <label className="flex items-center justify-between gap-4 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50">
-                <div>
-                  <div className="font-medium text-slate-900">{labels.meetAndGreetFee}</div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {formatMoneyFromJpy(MEET_AND_GREET_SIGN_FEE_JPY, "JPY", locale)} / {labels.perOrder}
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={meetAndGreetSign}
-                  onChange={(e) => {
-                    clearError();
-                    setMeetAndGreetSign(e.target.checked);
-                  }}
-                  className="h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                />
-              </label>
-            </div>
+              <input
+                type="checkbox"
+                checked={meetAndGreetSign}
+                onChange={(e) => {
+                  clearError();
+                  setMeetAndGreetSign(e.target.checked);
+                }}
+                className="h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+              />
+            </label>
           </div>
-        </div>
+        </FormSection>
 
-        <div className="grid md:grid-cols-3 gap-3">
+        <FormSection title={labels.contactInformation}>
           <Field label={labels.contactName}>
             <input
               className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
@@ -402,65 +494,116 @@ export function CheckoutForm({
             />
           </Field>
 
-          <Field label={labels.phoneCountryCode}>
-            <select
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-              value={phoneCountryCode}
-              onChange={(e) => {
-                clearError();
-                setPhoneCountryCode(e.target.value);
-              }}
-              required
+          <Field label={labels.contactPhone}>
+            <div
+              ref={phoneFieldRef}
+              className="relative overflow-visible rounded-xl border border-slate-200 bg-white transition-all focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-500/20"
             >
-              <option value="">{labels.selectCountryCode}</option>
-              {phoneCountryOptions.map((option) => (
-                <option key={`${option.regionCode}-${option.dialCode}`} value={option.dialCode}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <div className="flex min-w-0 items-stretch">
+                <div className="relative min-w-[116px] shrink-0 border-r border-slate-200 sm:min-w-[132px]">
+                  <button
+                    type="button"
+                    className="flex h-full w-full items-center justify-between gap-2 bg-transparent px-3 py-2 text-sm text-slate-900 focus:outline-none"
+                    onClick={() => setIsPhoneCountryMenuOpen((current) => !current)}
+                    aria-haspopup="listbox"
+                    aria-expanded={isPhoneCountryMenuOpen}
+                  >
+                    <span
+                      className={`truncate ${
+                        selectedPhoneCountryOption ? "text-slate-900" : "text-slate-400"
+                      }`}
+                    >
+                      {selectedPhoneCountryOption?.displayLabel ?? labels.selectCountryCode}
+                    </span>
+                    <svg
+                      className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${
+                        isPhoneCountryMenuOpen ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+
+                  {isPhoneCountryMenuOpen ? (
+                    <div className="absolute left-0 top-full z-[110] mt-1.5 max-h-72 min-w-[260px] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white py-2 shadow-xl sm:min-w-[320px]">
+                      <div role="listbox" aria-label={labels.phoneCountryCode}>
+                        {phoneCountryOptions.map((option) => {
+                          const isSelected =
+                            option.regionCode === phoneCountryRegionCode &&
+                            option.dialCode === phoneCountryCode;
+
+                          return (
+                            <button
+                              key={option.selectValue}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors ${
+                                isSelected
+                                  ? "bg-brand-600 text-white"
+                                  : "text-slate-900 hover:bg-brand-50"
+                              }`}
+                              onClick={() =>
+                                handlePhoneCountrySelect(option.regionCode, option.dialCode)
+                              }
+                            >
+                              <span className="truncate">{option.fullLabel}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <input
+                  ref={phoneLocalInputRef}
+                  type="tel"
+                  className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:outline-none"
+                  value={phoneLocalNumber}
+                  onChange={(e) => {
+                    clearError();
+                    setPhoneLocalNumber(e.target.value);
+                  }}
+                  onFocus={() => setIsPhoneCountryMenuOpen(false)}
+                  placeholder={labels.placeholderPhoneLocal || labels.placeholderPhone}
+                  required
+                />
+              </div>
+            </div>
           </Field>
 
-          <Field label={labels.phoneLocalNumber}>
+          <Field label={labels.contactEmail}>
             <input
-              type="tel"
+              type="email"
               className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-              value={phoneLocalNumber}
+              value={contactEmail}
               onChange={(e) => {
                 clearError();
-                setPhoneLocalNumber(e.target.value);
+                setContactEmail(e.target.value);
               }}
-              placeholder={labels.placeholderPhoneLocal || labels.placeholderPhone}
+              placeholder={labels.placeholderEmail || "you@example.com"}
               required
             />
           </Field>
-        </div>
+        </FormSection>
 
-        <Field label={labels.contactEmail}>
-          <input
-            type="email"
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-            value={contactEmail}
-            onChange={(e) => {
-              clearError();
-              setContactEmail(e.target.value);
-            }}
-            placeholder={labels.placeholderEmail || "you@example.com"}
-            required
-          />
-        </Field>
-
-        <Field label={labels.special}>
-          <textarea
-            className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white min-h-24"
-            value={contactNote}
-            onChange={(e) => {
-              clearError();
-              setContactNote(e.target.value);
-            }}
-            placeholder={labels.placeholderSpecial}
-          />
-        </Field>
+        <FormSection title={labels.specialRequests}>
+          <Field label={labels.special}>
+            <textarea
+              className="min-h-24 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+              value={contactNote}
+              onChange={(e) => {
+                clearError();
+                setContactNote(e.target.value);
+              }}
+              placeholder={labels.placeholderSpecial}
+            />
+          </Field>
+        </FormSection>
 
         {error ? (
           <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm">
@@ -483,25 +626,58 @@ export function CheckoutForm({
         <div className="sticky top-24">
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
-              <h2 className="font-bold text-slate-900">{labels.summary}</h2>
+              <SummarySectionHeader
+                title={labels.itinerarySummary}
+                toneClassName="border-brand-100 text-brand-600"
+                icon={(
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.8}
+                      d="M9 6h11M9 12h8m-8 6h11M4 6h.01M4 12h.01M4 18h.01"
+                    />
+                  </svg>
+                )}
+              />
             </div>
             <div className="p-6 space-y-4">
               <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">{labels.tripType}</span>
-                  <span className="font-medium text-slate-900">{summary.displayTripType}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">{labels.pickupTime}</span>
-                  <span className="font-medium text-slate-900">{summary.displayPickupTime}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">{labels.vehicle}</span>
-                  <span className="font-medium text-slate-900">{summary.displayVehicle}</span>
-                </div>
+                <SummaryRow label={labels.tripType} value={summary.displayTripType} />
+                <SummaryRow label={labels.pickupTime} value={summary.displayPickupTime} />
+                <SummaryRow label={labels.pickupLocation} value={pickupLocation} />
+                <SummaryRow label={labels.dropoffLocation} value={dropoffLocation} />
+                <SummaryRow label={labels.passengers} value={String(preset.passengers)} />
+                <SummaryRow label={labels.vehicle} value={summary.displayVehicle} />
               </div>
+            </div>
+          </div>
 
-              <div className="pt-4 border-t border-slate-100 space-y-3">
+          <div className="mt-4 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+            <div className="bg-slate-50 px-6 py-4 border-b border-slate-200">
+              <SummarySectionHeader
+                title={labels.summary}
+                toneClassName="border-emerald-100 text-emerald-600"
+                icon={(
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.8}
+                      d="M3 7.5A2.5 2.5 0 015.5 5h13A2.5 2.5 0 0121 7.5v9a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 16.5v-9z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.8}
+                      d="M3 9h18M7 14h3m2 0h5"
+                    />
+                  </svg>
+                )}
+              />
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-500">{labels.basePrice}</span>
                   <span className="text-slate-900">

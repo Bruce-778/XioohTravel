@@ -1,7 +1,7 @@
 import { SearchForm } from "@/components/SearchForm";
 import { AuthLink } from "@/components/AuthLink";
 import { HomeFaqSection } from "@/components/HomeFaqSection";
-import { HomePromoCarousel } from "@/components/HomePromoCarousel";
+import { HomePromoGallery } from "@/components/HomePromoGallery";
 import { HomeTrustSection } from "@/components/HomeTrustSection";
 import { getT } from "@/lib/i18n";
 
@@ -10,22 +10,16 @@ export default async function HomePage() {
   const promoSlides = [
     {
       id: "tokyo",
-      title: t("home.promo.tokyo.title"),
-      desc: t("home.promo.tokyo.desc"),
       imageSrc: "/home-promo/tokyo-coverpage.png",
       alt: t("home.promo.tokyo.alt"),
     },
     {
       id: "kyoto",
-      title: t("home.promo.kyoto.title"),
-      desc: t("home.promo.kyoto.desc"),
       imageSrc: "/home-promo/kyoto-coverpage.png",
       alt: t("home.promo.kyoto.alt"),
     },
     {
       id: "osaka",
-      title: t("home.promo.osaka.title"),
-      desc: t("home.promo.osaka.desc"),
       imageSrc: "/home-promo/osaka-coverpage.png",
       alt: t("home.promo.osaka.alt"),
     },
@@ -178,16 +172,9 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <HomePromoCarousel
+      <HomePromoGallery
         eyebrow={t("home.promo.eyebrow")}
         title={t("home.promo.title")}
-        subtitle={t("home.promo.subtitle")}
-        cta={t("home.promo.cta")}
-        labels={{
-          previous: t("home.promo.previous"),
-          next: t("home.promo.next"),
-          goTo: t("home.promo.goTo"),
-        }}
         slides={promoSlides}
       />
       <HomeTrustSection />

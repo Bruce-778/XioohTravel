@@ -223,7 +223,7 @@ export function LocationSelector({
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       {label ? (
-        <div className="text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
+        <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
           {isAirport ? (
             <svg className="w-4 h-4 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

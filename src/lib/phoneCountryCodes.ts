@@ -249,11 +249,30 @@ export const PHONE_COUNTRY_CODE_OPTIONS: PhoneCountryCodeOption[] = [
   { regionCode: "ZW", dialCode: "+263" },
 ];
 
-export function getPhoneCountryLabel(regionCode: string, dialCode: string, locale: string) {
+export function getPhoneCountryName(regionCode: string, locale: string) {
   const displayNames = new Intl.DisplayNames(
     [locale.startsWith("zh") ? "zh-CN" : "en"],
     { type: "region" }
   );
-  const regionName = displayNames.of(regionCode) ?? regionCode;
-  return `${regionName} (${dialCode})`;
+  return displayNames.of(regionCode) ?? regionCode;
+}
+
+export function getPhoneCountryLabel(regionCode: string, dialCode: string, locale: string) {
+  return `${getPhoneCountryName(regionCode, locale)} ${dialCode}`;
+}
+
+export function getFlagEmoji(regionCode: string) {
+  const normalizedRegionCode = regionCode.trim().toUpperCase();
+
+  if (!/^[A-Z]{2}$/.test(normalizedRegionCode)) {
+    return "🏳️";
+  }
+
+  return String.fromCodePoint(
+    ...normalizedRegionCode.split("").map((char) => 127397 + char.charCodeAt(0))
+  );
+}
+
+export function getCompactPhoneCountryLabel(regionCode: string, dialCode: string) {
+  return `${getFlagEmoji(regionCode)} ${dialCode}`;
 }
