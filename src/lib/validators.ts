@@ -71,3 +71,20 @@ export const AdminPricingRuleSchema = z.object({
   nightFeeJpy: z.coerce.number().int().min(0).max(100000).optional(),
   urgentFeeJpy: z.coerce.number().int().min(0).max(100000).optional()
 });
+
+export const AdminPricingImportRowSchema = z.object({
+  rowNumber: z.coerce.number().int().min(2),
+  fromArea: z.string().min(1),
+  toArea: z.string().min(1),
+  tripType: z.enum(["PICKUP", "DROPOFF", "POINT_TO_POINT"]),
+  vehicleTypeId: z.string().min(1),
+  vehicleTypeName: z.string().min(1),
+  basePriceJpy: z.coerce.number().int().min(0).max(1000000),
+  nightFeeJpy: z.coerce.number().int().min(0).max(100000),
+  urgentFeeJpy: z.coerce.number().int().min(0).max(100000),
+  action: z.enum(["create", "update"]),
+});
+
+export const AdminPricingImportCommitSchema = z.object({
+  rows: z.array(AdminPricingImportRowSchema).min(1),
+});

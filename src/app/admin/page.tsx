@@ -6,7 +6,7 @@ export default async function AdminPage() {
   const { t } = await getT();
   const locale = await getLocale();
   return (
-    <div className="max-w-6xl mx-auto px-4 py-10">
+    <div className="mx-auto max-w-[1480px] px-4 py-8 sm:px-6 sm:py-10">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">{t("admin.title")}</h2>
         <div className="text-sm text-slate-600 mt-1">
@@ -151,6 +151,57 @@ export default async function AdminPage() {
             vehicleTypeNotFound: t("admin.vehicleTypeNotFound"),
             selectVehicle: t("admin.selectVehicle"),
             pricingLockedHint: t("admin.pricingLockedHint"),
+            searchRoute: t("admin.searchRoute"),
+            resetFilters: t("admin.resetFilters"),
+            allTripTypes: t("admin.allTripTypes"),
+            allVehicleTypes: t("admin.allVehicleTypes"),
+            noPricingResults: t("admin.noPricingResults"),
+            importCsv: t("admin.importCsv"),
+            downloadTemplate: t("admin.downloadTemplate"),
+            suggested: t("admin.suggested"),
+            custom: t("admin.custom"),
+            selectKnownLocation: t("admin.selectKnownLocation"),
+            customLocationHint: t("admin.customLocationHint"),
+            routeSectionTitle: t("admin.routeSectionTitle"),
+            tripVehicleSection: t("admin.tripVehicleSection"),
+            pricingSectionTitle: t("admin.pricingSectionTitle"),
+            importTitle: t("admin.importTitle"),
+            importSubtitle: t("admin.importSubtitle"),
+            importPreview: t("admin.importPreview"),
+            importSummary: t("admin.importSummary"),
+            confirmImport: t("admin.confirmImport"),
+            importPreviewing: t("admin.importPreviewing"),
+            importing: t("admin.importing"),
+            importRows: t("admin.importRows"),
+            importErrors: t("admin.importErrors"),
+            importValidRows: t("admin.importValidRows"),
+            importInvalidRows: t("admin.importInvalidRows"),
+            importCreateCount: t("admin.importCreateCount"),
+            importUpdateCount: t("admin.importUpdateCount"),
+            importFileRequired: t("admin.importFileRequired"),
+            importCompleted: t("admin.importCompleted"),
+            rowNumber: t("admin.rowNumber"),
+            reason: t("admin.reason"),
+            notesLabel: t("admin.notesLabel"),
+            willCreate: t("admin.willCreate"),
+            willUpdate: t("admin.willUpdate"),
+            importNoValidRows: t("admin.importNoValidRows"),
+            chooseFile: t("admin.chooseFile"),
+            importCustomLocationNote: t("admin.importCustomLocationNote"),
+            importErrorMissingValue: t("admin.importErrorMissingValue"),
+            importErrorInvalidTripType: t("admin.importErrorInvalidTripType"),
+            importErrorInvalidPrice: t("admin.importErrorInvalidPrice"),
+            importErrorUnknownVehicleType: t("admin.importErrorUnknownVehicleType"),
+            importErrorDuplicateInFile: t("admin.importErrorDuplicateInFile"),
+            importErrorMissingColumn: t("admin.importErrorMissingColumn"),
+            fileName: t("admin.fileName"),
+            noErrorsFound: t("admin.noErrorsFound"),
+            duplicate: t("admin.duplicate"),
+            updatedAtLabel: t("admin.updatedAtLabel"),
+            recentlyUpdated: t("admin.recentlyUpdated"),
+            clearFilter: t("admin.clearFilter"),
+            unsavedChangesTitle: t("admin.unsavedChangesTitle"),
+            unsavedChangesText: t("admin.unsavedChangesText"),
           }}
         />
       </div>

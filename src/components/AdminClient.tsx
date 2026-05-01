@@ -1,9 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  normalizePricingRouteValue,
+  type PricingImportPreviewRow,
+  type PricingImportPreviewSummary,
+  type PricingTripType,
+} from "@/lib/adminPricing";
 import { formatMoneyFromJpy } from "@/lib/currencyClient";
 import { formatDateTimeJST } from "@/lib/timeFormat";
 import type { Currency } from "@/lib/currency";
+import {
+  AIRPORTS,
+  POPULAR_AREAS,
+  findAirportByInput,
+  findAreaByInput,
+  getLocalizedLocation,
+} from "@/lib/locationData";
 
 // Client-side currency helper
 function getCurrencyFromCookie(): Currency {
@@ -66,6 +79,8 @@ type AdminRow = {
 };
 type PricingRule = {
   id: string;
+  createdAt: string;
+  updatedAt: string;
   fromArea: string;
   toArea: string;
   tripType: string;
@@ -83,6 +98,51 @@ type VehicleType = {
   id: string;
   name: string;
   seats: number;
+};
+
+type PricingRuleFormState = {
+  fromArea: string;
+  toArea: string;
+  tripType: PricingTripType;
+  vehicleTypeId: string;
+  basePriceJpy: number;
+  nightFeeJpy: number;
+  urgentFeeJpy: number;
+};
+
+type PricingLocationMode = "suggested" | "custom";
+type PricingRouteModeState = {
+  from: PricingLocationMode;
+  to: PricingLocationMode;
+};
+
+type PricingFilterState = {
+  keyword: string;
+  fromArea: string;
+  toArea: string;
+  tripType: string;
+  vehicleTypeId: string;
+};
+
+type PricingImportPreviewErrorRow = {
+  rowNumber: number;
+  field: string;
+  reason: string;
+};
+
+type PricingImportPreviewState = {
+  fileName: string;
+  rows: PricingImportPreviewRow[];
+  errors: PricingImportPreviewErrorRow[];
+  summary: PricingImportPreviewSummary;
+};
+
+const EMPTY_PRICING_FILTERS: PricingFilterState = {
+  keyword: "",
+  fromArea: "",
+  toArea: "",
+  tripType: "",
+  vehicleTypeId: "",
 };
 
 type Labels = {
@@ -207,6 +267,57 @@ type Labels = {
   itemsPerPageSuffix: string;
   selectVehicle: string;
   pricingLockedHint: string;
+  searchRoute: string;
+  resetFilters: string;
+  allTripTypes: string;
+  allVehicleTypes: string;
+  noPricingResults: string;
+  importCsv: string;
+  downloadTemplate: string;
+  suggested: string;
+  custom: string;
+  selectKnownLocation: string;
+  customLocationHint: string;
+  routeSectionTitle: string;
+  tripVehicleSection: string;
+  pricingSectionTitle: string;
+  importTitle: string;
+  importSubtitle: string;
+  importPreview: string;
+  importSummary: string;
+  confirmImport: string;
+  importPreviewing: string;
+  importing: string;
+  importRows: string;
+  importErrors: string;
+  importValidRows: string;
+  importInvalidRows: string;
+  importCreateCount: string;
+  importUpdateCount: string;
+  importFileRequired: string;
+  importCompleted: string;
+  rowNumber: string;
+  reason: string;
+  notesLabel: string;
+  willCreate: string;
+  willUpdate: string;
+  importNoValidRows: string;
+  chooseFile: string;
+  importCustomLocationNote: string;
+  importErrorMissingValue: string;
+  importErrorInvalidTripType: string;
+  importErrorInvalidPrice: string;
+  importErrorUnknownVehicleType: string;
+  importErrorDuplicateInFile: string;
+  importErrorMissingColumn: string;
+  fileName: string;
+  noErrorsFound: string;
+  duplicate: string;
+  updatedAtLabel: string;
+  recentlyUpdated: string;
+  clearFilter: string;
+  unsavedChangesTitle: string;
+  unsavedChangesText: string;
 };
 
 function getStatusBadgeClass(status: string) {
@@ -222,6 +333,13 @@ function getStatusBadgeClass(status: string) {
     default:
       return "bg-blue-500 text-white";
   }
+}
+
+function serializePricingRuleSnapshot(
+  form: PricingRuleFormState,
+  routeMode: PricingRouteModeState
+) {
+  return JSON.stringify({ form, routeMode });
 }
 
 export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; locale?: string }) {
@@ -271,25 +389,253 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [showRuleForm, setShowRuleForm] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const editingRule = useMemo(() => pricingRules.find((r) => r.id === editingRuleId) ?? null, [pricingRules, editingRuleId]);
-  
-  // Pagination calculations
+  const [pricingKeyword, setPricingKeyword] = useState("");
+  const [pricingFromArea, setPricingFromArea] = useState("");
+  const [pricingToArea, setPricingToArea] = useState("");
+  const [pricingTripType, setPricingTripType] = useState("");
+  const [pricingVehicleTypeId, setPricingVehicleTypeId] = useState("");
+  const [appliedPricingFilters, setAppliedPricingFilters] = useState<PricingFilterState>(EMPTY_PRICING_FILTERS);
+  const [routeMode, setRouteMode] = useState<PricingRouteModeState>({
+    from: "suggested",
+    to: "suggested",
+  });
+  const [importPreview, setImportPreview] = useState<PricingImportPreviewState | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [ruleFormInitialSnapshot, setRuleFormInitialSnapshot] = useState("");
+  const pricingFileInputRef = useRef<HTMLInputElement | null>(null);
+  const isZh = locale.startsWith("zh");
+
+  function getBlankRuleForm(): PricingRuleFormState {
+    return {
+      fromArea: "",
+      toArea: "",
+      tripType: "PICKUP",
+      vehicleTypeId: "",
+      basePriceJpy: 0,
+      nightFeeJpy: 0,
+      urgentFeeJpy: 0,
+    };
+  }
+
+  const [ruleForm, setRuleForm] = useState<PricingRuleFormState>(getBlankRuleForm());
+
+  const pricingLocationOptions = useMemo(() => {
+    const airportOptions = AIRPORTS.map((airport) => ({
+      value: airport.code,
+      label: `${isZh ? airport.name.zh : airport.name.en} (${airport.code})`,
+    }));
+
+    const areaOptions = POPULAR_AREAS.map((area) => ({
+      value: area.code,
+      label: `${isZh ? area.name.zh : area.name.en} (${area.code})`,
+    }));
+
+    return [...airportOptions, ...areaOptions];
+  }, [isZh]);
+
+  const knownPricingLocationValues = useMemo(
+    () => new Set(pricingLocationOptions.map((option) => option.value.toLowerCase())),
+    [pricingLocationOptions]
+  );
+
+  const hasActivePricingFilters = useMemo(
+    () =>
+      [
+        appliedPricingFilters.keyword,
+        appliedPricingFilters.fromArea,
+        appliedPricingFilters.toArea,
+        appliedPricingFilters.tripType,
+        appliedPricingFilters.vehicleTypeId,
+      ].some((value) => value.trim() !== ""),
+    [appliedPricingFilters]
+  );
+
+  function getDraftPricingFilters(): PricingFilterState {
+    return {
+      keyword: pricingKeyword,
+      fromArea: pricingFromArea,
+      toArea: pricingToArea,
+      tripType: pricingTripType,
+      vehicleTypeId: pricingVehicleTypeId,
+    };
+  }
+
+  function getServerPricingFilters(filters: PricingFilterState) {
+    return {
+      keyword: filters.keyword.trim(),
+      fromArea: filters.fromArea.trim(),
+      toArea: filters.toArea.trim(),
+      tripType: filters.tripType.trim(),
+      vehicleTypeId: filters.vehicleTypeId.trim(),
+    };
+  }
+
+  function syncPricingFilterInputs(filters: PricingFilterState) {
+    setPricingKeyword(filters.keyword);
+    setPricingFromArea(filters.fromArea);
+    setPricingToArea(filters.toArea);
+    setPricingTripType(filters.tripType);
+    setPricingVehicleTypeId(filters.vehicleTypeId);
+  }
+
+  function getDefaultRuleForm(filters: PricingFilterState = appliedPricingFilters): PricingRuleFormState {
+    const defaults = getBlankRuleForm();
+    if (filters.fromArea.trim()) {
+      defaults.fromArea = normalizePricingRouteValue(filters.fromArea) || filters.fromArea.trim();
+    }
+    if (filters.toArea.trim()) {
+      defaults.toArea = normalizePricingRouteValue(filters.toArea) || filters.toArea.trim();
+    }
+    if (filters.tripType.trim()) {
+      defaults.tripType = filters.tripType as PricingTripType;
+    }
+    if (filters.vehicleTypeId.trim()) {
+      defaults.vehicleTypeId = filters.vehicleTypeId.trim();
+    }
+    return defaults;
+  }
+
+  function isSuggestedLocationValue(value: string) {
+    const normalized = normalizePricingRouteValue(value).toLowerCase();
+    return knownPricingLocationValues.has(normalized);
+  }
+
+  function getRouteModeForForm(form: PricingRuleFormState): PricingRouteModeState {
+    return {
+      from: form.fromArea && !isSuggestedLocationValue(form.fromArea) ? "custom" : "suggested",
+      to: form.toArea && !isSuggestedLocationValue(form.toArea) ? "custom" : "suggested",
+    };
+  }
+
+  function closePricingRuleForm() {
+    setEditingRuleId(null);
+    setShowRuleForm(false);
+    setRuleForm(getBlankRuleForm());
+    setRouteMode({ from: "suggested", to: "suggested" });
+    setRuleFormInitialSnapshot("");
+  }
+
+  function attemptClosePricingRuleForm() {
+    if (pricingSaving) {
+      return;
+    }
+
+    const currentSnapshot = serializePricingRuleSnapshot(ruleForm, routeMode);
+    if (ruleFormInitialSnapshot && currentSnapshot !== ruleFormInitialSnapshot) {
+      const shouldDiscard = window.confirm(
+        `${labels.unsavedChangesTitle}\n\n${labels.unsavedChangesText}`
+      );
+      if (!shouldDiscard) {
+        return;
+      }
+    }
+
+    closePricingRuleForm();
+  }
+
+  function openPricingRuleForm(
+    form: PricingRuleFormState,
+    nextEditingRuleId: string | null
+  ) {
+    const nextRouteMode = getRouteModeForForm(form);
+    setEditingRuleId(nextEditingRuleId);
+    setRuleForm(form);
+    setRouteMode(nextRouteMode);
+    setRuleFormInitialSnapshot(serializePricingRuleSnapshot(form, nextRouteMode));
+    setShowRuleForm(true);
+  }
+
+  function openCreatePricingRule(prefill?: PricingRuleFormState) {
+    openPricingRuleForm(prefill ? { ...prefill } : getDefaultRuleForm(), null);
+  }
+
+  function openEditPricingRule(rule: PricingRule) {
+    openPricingRuleForm(
+      {
+        fromArea: rule.fromArea,
+        toArea: rule.toArea,
+        tripType: rule.tripType as PricingTripType,
+        vehicleTypeId: rule.vehicleType.id,
+        basePriceJpy: rule.basePriceJpy,
+        nightFeeJpy: rule.nightFeeJpy,
+        urgentFeeJpy: rule.urgentFeeJpy,
+      },
+      rule.id
+    );
+  }
+
+  function getPricingDisplayValue(value: string) {
+    const airport = findAirportByInput(value);
+    if (airport) {
+      const airportName = isZh ? airport.name.zh : airport.name.en;
+      return `${airportName} (${airport.code})`;
+    }
+
+    const area = findAreaByInput(value);
+    if (area) {
+      return isZh ? area.name.zh : area.name.en;
+    }
+
+    return getLocalizedLocation(value, locale);
+  }
+
+  function getTripTypeLabel(value: string) {
+    return labels.tripTypes[value as keyof typeof labels.tripTypes] || value;
+  }
+
+  const activePricingFilterChips = useMemo(() => {
+    const chips: Array<{ key: keyof PricingFilterState; label: string }> = [];
+
+    if (appliedPricingFilters.keyword.trim()) {
+      chips.push({
+        key: "keyword",
+        label: `${labels.searchRoute}: ${appliedPricingFilters.keyword.trim()}`,
+      });
+    }
+
+    if (appliedPricingFilters.fromArea.trim()) {
+      chips.push({
+        key: "fromArea",
+        label: `${labels.fromArea}: ${getPricingDisplayValue(appliedPricingFilters.fromArea.trim())}`,
+      });
+    }
+
+    if (appliedPricingFilters.toArea.trim()) {
+      chips.push({
+        key: "toArea",
+        label: `${labels.toArea}: ${getPricingDisplayValue(appliedPricingFilters.toArea.trim())}`,
+      });
+    }
+
+    if (appliedPricingFilters.tripType.trim()) {
+      chips.push({
+        key: "tripType",
+        label: `${labels.tripType}: ${getTripTypeLabel(appliedPricingFilters.tripType.trim())}`,
+      });
+    }
+
+    if (appliedPricingFilters.vehicleTypeId.trim()) {
+      const vehicle = vehicleTypes.find((item) => item.id === appliedPricingFilters.vehicleTypeId.trim());
+      const vehicleLabel = vehicle ? labels.vehicles[vehicle.name] || vehicle.name : appliedPricingFilters.vehicleTypeId.trim();
+      chips.push({
+        key: "vehicleTypeId",
+        label: `${labels.vehicleType}: ${vehicleLabel}`,
+      });
+    }
+
+    return chips;
+  }, [appliedPricingFilters, labels.fromArea, labels.searchRoute, labels.toArea, labels.tripType, labels.vehicleType, vehicleTypes]);
+
   const totalPages = Math.ceil(pricingRules.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedRules = pricingRules.slice(startIndex, endIndex);
   const isPricingLocked = editingRow ? editingRow.status !== "PENDING_PAYMENT" : false;
-  const [ruleForm, setRuleForm] = useState({
-    fromArea: "",
-    toArea: "",
-    tripType: "PICKUP" as "PICKUP" | "DROPOFF" | "POINT_TO_POINT",
-    vehicleTypeId: "",
-    basePriceJpy: 0,
-    nightFeeJpy: 0,
-    urgentFeeJpy: 0
-  });
 
   useEffect(() => {
     setCurrency(getCurrencyFromCookie());
@@ -460,14 +806,30 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     }
   }
 
-  async function loadPricingRules() {
+  async function loadPricingRules(
+    filters = getServerPricingFilters(appliedPricingFilters),
+    options?: { resetPage?: boolean; appliedFilters?: PricingFilterState }
+  ) {
     setPricingLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/pricing", { cache: "no-store" });
+      const params = new URLSearchParams();
+      if (filters.keyword) params.append("q", filters.keyword);
+      if (filters.fromArea) params.append("fromArea", filters.fromArea);
+      if (filters.toArea) params.append("toArea", filters.toArea);
+      if (filters.tripType) params.append("tripType", filters.tripType);
+      if (filters.vehicleTypeId) params.append("vehicleTypeId", filters.vehicleTypeId);
+
+      const res = await fetch(`/api/admin/pricing?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? labels.loadFailed);
       setPricingRules(sortPricingRules(data.rules ?? []));
+      if (options?.appliedFilters) {
+        setAppliedPricingFilters(options.appliedFilters);
+      }
+      if (options?.resetPage) {
+        setCurrentPage(1);
+      }
     } catch (e: any) {
       setError(e?.message ?? labels.loadFailed);
     } finally {
@@ -475,20 +837,42 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     }
   }
 
-  useEffect(() => {
-    if (editingRule) {
-      setShowRuleForm(true);
-      setRuleForm({
-        fromArea: editingRule.fromArea,
-        toArea: editingRule.toArea,
-        tripType: editingRule.tripType as any,
-        vehicleTypeId: editingRule.vehicleType.id,
-        basePriceJpy: editingRule.basePriceJpy,
-        nightFeeJpy: editingRule.nightFeeJpy,
-        urgentFeeJpy: editingRule.urgentFeeJpy
-      });
-    }
-  }, [editingRule]);
+  async function applyPricingFilters(nextFilters: PricingFilterState = getDraftPricingFilters()) {
+    const normalizedFilters: PricingFilterState = {
+      keyword: nextFilters.keyword.trim(),
+      fromArea: nextFilters.fromArea.trim(),
+      toArea: nextFilters.toArea.trim(),
+      tripType: nextFilters.tripType.trim(),
+      vehicleTypeId: nextFilters.vehicleTypeId.trim(),
+    };
+
+    syncPricingFilterInputs(normalizedFilters);
+    await loadPricingRules(getServerPricingFilters(normalizedFilters), {
+      resetPage: true,
+      appliedFilters: normalizedFilters,
+    });
+  }
+
+  async function resetPricingFilters() {
+    syncPricingFilterInputs(EMPTY_PRICING_FILTERS);
+    await loadPricingRules(getServerPricingFilters(EMPTY_PRICING_FILTERS), {
+      resetPage: true,
+      appliedFilters: EMPTY_PRICING_FILTERS,
+    });
+  }
+
+  async function clearPricingFilterChip(key: keyof PricingFilterState) {
+    const nextFilters: PricingFilterState = {
+      ...appliedPricingFilters,
+      [key]: "",
+    };
+
+    syncPricingFilterInputs(nextFilters);
+    await loadPricingRules(getServerPricingFilters(nextFilters), {
+      resetPage: true,
+      appliedFilters: nextFilters,
+    });
+  }
 
   async function savePricingRule() {
     setPricingSaving(true);
@@ -506,28 +890,8 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? labels.saveFailed);
 
-      if (data?.rule) {
-        setPricingRules((prev) => {
-          const next = editingRuleId
-            ? prev.map((rule) => (rule.id === data.rule.id ? data.rule : rule))
-            : [data.rule, ...prev];
-          return sortPricingRules(next);
-        });
-      } else {
-        await loadPricingRules();
-      }
-
-      setEditingRuleId(null);
-      setShowRuleForm(false);
-      setRuleForm({
-        fromArea: "",
-        toArea: "",
-        tripType: "PICKUP",
-        vehicleTypeId: "",
-        basePriceJpy: 0,
-        nightFeeJpy: 0,
-        urgentFeeJpy: 0
-      });
+      await loadPricingRules(getServerPricingFilters(appliedPricingFilters));
+      closePricingRuleForm();
     } catch (e: any) {
       setError(e?.message ?? labels.saveFailed);
     } finally {
@@ -546,7 +910,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? labels.deleteFailed);
-      setPricingRules((prev) => prev.filter((rule) => rule.id !== id));
+      await loadPricingRules(getServerPricingFilters(appliedPricingFilters));
     } catch (e: any) {
       setError(e?.message ?? labels.deleteFailed);
     } finally {
@@ -556,26 +920,99 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
 
   useEffect(() => {
     if (token && activeTab === "pricing") {
-      void Promise.all([loadVehicles(), loadPricingRules()]);
+      syncPricingFilterInputs(appliedPricingFilters);
+      void Promise.all([
+        loadVehicles(),
+        loadPricingRules(getServerPricingFilters(appliedPricingFilters), {
+          resetPage: true,
+          appliedFilters: appliedPricingFilters,
+        }),
+      ]);
     }
-  }, [token, activeTab]);
+  }, [activeTab, token]);
+
+  async function downloadPricingTemplate() {
+    setError(null);
+    try {
+      window.location.assign("/api/admin/pricing/import/template");
+    } catch (e: any) {
+      setError(e?.message ?? labels.loadFailed);
+    }
+  }
+
+  async function handlePricingImportFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setError(labels.importFileRequired);
+      return;
+    }
+
+    setImportLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/admin/pricing/import/preview", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? labels.loadFailed);
+
+      setImportPreview({
+        fileName: file.name,
+        rows: data.rows ?? [],
+        errors: data.errors ?? [],
+        summary: data.summary,
+      });
+      setShowImportModal(true);
+    } catch (e: any) {
+      setError(e?.message ?? labels.loadFailed);
+    } finally {
+      setImportLoading(false);
+      event.target.value = "";
+    }
+  }
+
+  async function commitPricingImport() {
+    if (!importPreview) return;
+    setImportSubmitting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/admin/pricing/import/commit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ rows: importPreview.rows }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? labels.loadFailed);
+
+      await loadPricingRules(getServerPricingFilters(appliedPricingFilters), {
+        resetPage: true,
+        appliedFilters: appliedPricingFilters,
+      });
+      setShowImportModal(false);
+      setImportPreview(null);
+      setNotice(labels.importCompleted);
+    } catch (e: any) {
+      setError(e?.message ?? labels.loadFailed);
+    } finally {
+      setImportSubmitting(false);
+    }
+  }
 
   // Handle ESC key to close modals
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (showRuleForm) {
-          setEditingRuleId(null);
-          setShowRuleForm(false);
-          setRuleForm({
-            fromArea: "",
-            toArea: "",
-            tripType: "PICKUP",
-            vehicleTypeId: "",
-            basePriceJpy: 0,
-            nightFeeJpy: 0,
-            urgentFeeJpy: 0
-          });
+          attemptClosePricingRuleForm();
+        }
+        if (showImportModal) {
+          setShowImportModal(false);
         }
         if (editingRow) {
           setEditingId(null);
@@ -584,7 +1021,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [showRuleForm, editingRow]);
+  }, [editingRow, showImportModal, showRuleForm, ruleForm, routeMode, ruleFormInitialSnapshot, pricingSaving]);
 
   async function handleLogin() {
     if (!token) return;
@@ -602,7 +1039,14 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
         if (activeTab === "orders") {
           void load();
         } else {
-          void Promise.all([loadVehicles(), loadPricingRules()]);
+          syncPricingFilterInputs(appliedPricingFilters);
+          void Promise.all([
+            loadVehicles(),
+            loadPricingRules(getServerPricingFilters(appliedPricingFilters), {
+              resetPage: true,
+              appliedFilters: appliedPricingFilters,
+            }),
+          ]);
         }
       } else {
         const data = await res.json();
@@ -614,6 +1058,13 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
       setLoading(false);
     }
   }
+
+  const pricingToolbarButtonClass =
+    "inline-flex min-h-[46px] items-center justify-center whitespace-nowrap rounded-2xl border border-brand-200 bg-brand-50 px-4 py-2.5 text-sm font-medium text-brand-700 shadow-sm transition hover:border-brand-300 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60";
+  const pricingToolbarPrimaryButtonClass =
+    "inline-flex min-h-[46px] items-center justify-center whitespace-nowrap rounded-2xl border border-brand-300 bg-brand-100 px-4 py-2.5 text-sm font-semibold text-brand-800 shadow-sm shadow-brand-100/60 transition hover:border-brand-400 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-60";
+  const pricingFilterFieldClass =
+    "h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-4 focus:ring-brand-100";
 
   if (isChecking) {
     return (
@@ -693,6 +1144,18 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
           </button>
         </div>
       </div>
+
+      {notice ? (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {notice}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
 
       {activeTab === "orders" ? (
       <>
@@ -1239,282 +1702,715 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
       </>
       ) : (
         <>
-          <div className="p-5 rounded-2xl bg-white border border-slate-200">
-            <div className="font-semibold">{labels.pricingTitle}</div>
-            <div className="text-sm text-slate-600 mt-1">{labels.pricingSubtitle}</div>
-            
-            <div className="mt-4">
-              <button
-                onClick={() => {
-                  setEditingRuleId(null);
-                  setShowRuleForm(true);
-                  setRuleForm({
-                    fromArea: "",
-                    toArea: "",
-                    tripType: "PICKUP",
-                    vehicleTypeId: "",
-                    basePriceJpy: 0,
-                    nightFeeJpy: 0,
-                    urgentFeeJpy: 0
-                  });
-                }}
-                disabled={pricingLoading || pricingSaving || !token}
-                className="px-4 py-2 rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60 text-sm font-medium"
-              >
-                {labels.addRule}
-              </button>
+          <div className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_28px_80px_-48px_rgba(15,23,42,0.32)] sm:p-6">
+            <div>
+              <div className="text-lg font-semibold text-slate-900">{labels.pricingTitle}</div>
+              <div className="mt-1 text-sm text-slate-600">{labels.pricingSubtitle}</div>
             </div>
 
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="text-left text-slate-600">
-                  <tr className="border-b border-slate-200">
-                    <th className="py-2 pr-4">{labels.fromArea}</th>
-                    <th className="py-2 pr-4">{labels.toArea}</th>
-                    <th className="py-2 pr-4">{labels.tripType}</th>
-                    <th className="py-2 pr-4">{labels.vehicleType}</th>
-                    <th className="py-2 pr-4">{labels.basePrice}</th>
-                    <th className="py-2 pr-4">{labels.nightFee}</th>
-                    <th className="py-2 pr-4">{labels.urgentFee}</th>
-                    <th className="py-2 pr-4">{labels.action}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedRules.length === 0 ? (
-                    <tr>
-                      <td className="py-4 text-slate-500" colSpan={8}>
-                        {pricingLoading ? labels.loading : labels.noRules}
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedRules.map((r) => (
-                      <tr key={r.id} className="border-b border-slate-100">
-                        <td className="py-3 pr-4">{r.fromArea}</td>
-                        <td className="py-3 pr-4">{r.toArea}</td>
-                        <td className="py-3 pr-4">
-                          {labels.tripTypes[r.tripType as keyof typeof labels.tripTypes] || r.tripType}
-                        </td>
-                        <td className="py-3 pr-4">{labels.vehicles[r.vehicleType.name] || r.vehicleType.name}</td>
-                        <td className="py-3 pr-4">{formatMoneyFromJpy(r.basePriceJpy, currency, locale)}</td>
-                        <td className="py-3 pr-4">{formatMoneyFromJpy(r.nightFeeJpy, currency, locale)}</td>
-                        <td className="py-3 pr-4">{formatMoneyFromJpy(r.urgentFeeJpy, currency, locale)}</td>
-                        <td className="py-3 pr-4">
-                          <div className="flex gap-2">
-                            <button
-                              className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-sm"
-                              onClick={() => {
-                                setEditingRuleId(r.id);
-                                setShowRuleForm(true);
-                              }}
-                              disabled={pricingSaving || deletingRuleId !== null}
-                            >
-                              {labels.edit}
-                            </button>
-                            <button
-                              className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 text-sm"
-                              onClick={() => deletePricingRule(r.id)}
-                              disabled={pricingSaving || deletingRuleId !== null}
-                            >
-                              {deletingRuleId === r.id ? labels.deleting : labels.delete}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <div className="mt-5 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_70px_-46px_rgba(15,23,42,0.34)]">
+              <div className="bg-gradient-to-r from-slate-50 via-white to-brand-50/35 px-5 py-5 sm:px-6">
+                <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1.45fr)_repeat(4,minmax(0,1fr))]">
+                  <label className="block text-sm">
+                    <div className="mb-2 text-xs font-semibold text-slate-500">{labels.searchRoute}</div>
+                    <input
+                      className={pricingFilterFieldClass}
+                      value={pricingKeyword}
+                      onChange={(e) => setPricingKeyword(e.target.value)}
+                      placeholder={labels.searchRoute}
+                    />
+                  </label>
 
-            {/* Pagination Controls */}
-            {pricingRules.length > 0 && (
-              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-sm text-slate-600">
-                  {labels.pageOf
-                    .replace("{total}", String(pricingRules.length))
-                    .replace("{current}", String(currentPage))
-                    .replace("{totalPages}", String(totalPages))}
-                </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm"
-                    value={itemsPerPage}
-                    onChange={(e) => {
-                      setItemsPerPage(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                  <button
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    {labels.previous}
-                  </button>
-                  <span className="px-3 py-1.5 text-sm text-slate-600">
-                    {currentPage} / {totalPages}
-                  </span>
-                  <button
-                    className="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                  >
-                    {labels.next}
-                  </button>
+                  <label className="block text-sm">
+                    <div className="mb-2 text-xs font-semibold text-slate-500">{labels.fromArea}</div>
+                    <input
+                      className={pricingFilterFieldClass}
+                      value={pricingFromArea}
+                      onChange={(e) => setPricingFromArea(e.target.value)}
+                      placeholder={labels.fromAreaPlaceholder}
+                    />
+                  </label>
+
+                  <label className="block text-sm">
+                    <div className="mb-2 text-xs font-semibold text-slate-500">{labels.toArea}</div>
+                    <input
+                      className={pricingFilterFieldClass}
+                      value={pricingToArea}
+                      onChange={(e) => setPricingToArea(e.target.value)}
+                      placeholder={labels.toAreaPlaceholder}
+                    />
+                  </label>
+
+                  <label className="block text-sm">
+                    <div className="mb-2 text-xs font-semibold text-slate-500">{labels.tripType}</div>
+                    <select
+                      className={pricingFilterFieldClass}
+                      value={pricingTripType}
+                      onChange={(e) => setPricingTripType(e.target.value)}
+                    >
+                      <option value="">{labels.allTripTypes}</option>
+                      <option value="PICKUP">{labels.tripTypes.PICKUP}</option>
+                      <option value="DROPOFF">{labels.tripTypes.DROPOFF}</option>
+                      <option value="POINT_TO_POINT">{labels.tripTypes.POINT_TO_POINT}</option>
+                    </select>
+                  </label>
+
+                  <label className="block text-sm">
+                    <div className="mb-2 text-xs font-semibold text-slate-500">{labels.vehicleType}</div>
+                    <select
+                      className={pricingFilterFieldClass}
+                      value={pricingVehicleTypeId}
+                      onChange={(e) => setPricingVehicleTypeId(e.target.value)}
+                    >
+                      <option value="">{labels.allVehicleTypes}</option>
+                      {vehicleTypes.map((vehicle) => (
+                        <option key={vehicle.id} value={vehicle.id}>
+                          {labels.vehicles[vehicle.name] || vehicle.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               </div>
-            )}
+
+              <div className="border-t border-slate-200 px-5 py-4 sm:px-6">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={() => void applyPricingFilters()}
+                      disabled={pricingLoading || pricingSaving || importLoading}
+                      className={pricingToolbarButtonClass}
+                    >
+                      {labels.filter}
+                    </button>
+                    <button
+                      onClick={() => void resetPricingFilters()}
+                      disabled={pricingLoading || pricingSaving || importLoading}
+                      className={pricingToolbarButtonClass}
+                    >
+                      {labels.resetFilters}
+                    </button>
+                  </div>
+
+                  <input
+                    ref={pricingFileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={(e) => void handlePricingImportFileChange(e)}
+                  />
+
+                  <div className="flex flex-wrap gap-3 lg:justify-end">
+                    <button
+                      onClick={() => void downloadPricingTemplate()}
+                      disabled={pricingLoading || importLoading || pricingSaving}
+                      className={pricingToolbarButtonClass}
+                    >
+                      {labels.downloadTemplate}
+                    </button>
+
+                    <button
+                      onClick={() => pricingFileInputRef.current?.click()}
+                      disabled={pricingLoading || importLoading || pricingSaving}
+                      className={pricingToolbarButtonClass}
+                    >
+                      {importLoading ? labels.importPreviewing : labels.importCsv}
+                    </button>
+
+                    <button
+                      onClick={() => openCreatePricingRule()}
+                      disabled={pricingLoading || importLoading || pricingSaving}
+                      className={pricingToolbarPrimaryButtonClass}
+                    >
+                      {labels.addRule}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {activePricingFilterChips.length > 0 ? (
+                <div className="border-t border-slate-100 bg-white px-5 py-3 sm:px-6">
+                  <div className="flex flex-wrap gap-2">
+                    {activePricingFilterChips.map((chip) => (
+                      <button
+                        key={chip.key}
+                        type="button"
+                        onClick={() => void clearPricingFilterChip(chip.key)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                        aria-label={`${labels.clearFilter}: ${chip.label}`}
+                      >
+                        <span>{chip.label}</span>
+                        <span aria-hidden className="text-sm leading-none">×</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="border-t border-slate-200">
+                <div className="overflow-x-auto">
+                  <table className="min-w-[1180px] w-full text-sm">
+                    <thead className="bg-slate-50/90 text-left text-slate-500">
+                      <tr className="border-b border-slate-200">
+                        <th className="w-[38%] min-w-[320px] px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.route}</th>
+                        <th className="w-[130px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.tripType}</th>
+                        <th className="w-[180px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.vehicleType}</th>
+                        <th className="w-[130px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.basePrice}</th>
+                        <th className="w-[130px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.nightFee}</th>
+                        <th className="w-[130px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.urgentFee}</th>
+                        <th className="w-[170px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.action}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {paginatedRules.length === 0 ? (
+                        <tr>
+                          <td className="px-5 py-16 text-center text-slate-500" colSpan={7}>
+                            {pricingLoading
+                              ? labels.loading
+                              : hasActivePricingFilters
+                                ? labels.noPricingResults
+                                : labels.noRules}
+                          </td>
+                        </tr>
+                      ) : (
+                        paginatedRules.map((rule) => (
+                          <tr key={rule.id} className="align-middle transition hover:bg-brand-50/30">
+                            <td className="px-5 py-5">
+                              <div className="font-semibold leading-6 text-slate-900">
+                                {getPricingDisplayValue(rule.fromArea)} {"->"} {getPricingDisplayValue(rule.toArea)}
+                              </div>
+                              <div className="mt-1 text-xs leading-5 text-slate-500">
+                                {rule.fromArea} {"->"} {rule.toArea}
+                              </div>
+                            </td>
+                            <td className="px-5 py-5 align-top">
+                              <span className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                {getTripTypeLabel(rule.tripType)}
+                              </span>
+                            </td>
+                            <td className="px-5 py-5 align-top">
+                              <span className="inline-flex whitespace-nowrap rounded-full border border-brand-100 bg-brand-50/80 px-2.5 py-1 text-xs font-medium text-brand-700">
+                                {labels.vehicles[rule.vehicleType.name] || rule.vehicleType.name}
+                              </span>
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                              {formatMoneyFromJpy(rule.basePriceJpy, currency, locale)}
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                              {formatMoneyFromJpy(rule.nightFeeJpy, currency, locale)}
+                            </td>
+                            <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                              {formatMoneyFromJpy(rule.urgentFeeJpy, currency, locale)}
+                            </td>
+                            <td className="px-5 py-5 align-top">
+                              <div className="flex flex-nowrap justify-end gap-2.5 whitespace-nowrap">
+                                <button
+                                  className="whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
+                                  onClick={() => openEditPricingRule(rule)}
+                                  disabled={pricingSaving || deletingRuleId !== null}
+                                >
+                                  {labels.edit}
+                                </button>
+                                <button
+                                  className="whitespace-nowrap rounded-xl border border-rose-200 px-3.5 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+                                  onClick={() => void deletePricingRule(rule.id)}
+                                  disabled={pricingSaving || deletingRuleId !== null}
+                                >
+                                  {deletingRuleId === rule.id ? labels.deleting : labels.delete}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {pricingRules.length > 0 && (
+                <div className="flex flex-col gap-4 border-t border-slate-200 bg-slate-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-slate-600">
+                    {labels.pageOf
+                      .replace("{total}", String(pricingRules.length))
+                      .replace("{current}", String(currentPage))
+                      .replace("{totalPages}", String(totalPages))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <option value={10}>10 {labels.itemsPerPageSuffix}</option>
+                      <option value={20}>20 {labels.itemsPerPageSuffix}</option>
+                      <option value={50}>50 {labels.itemsPerPageSuffix}</option>
+                      <option value={100}>100 {labels.itemsPerPageSuffix}</option>
+                    </select>
+                    <button
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      disabled={currentPage === 1}
+                    >
+                      {labels.previous}
+                    </button>
+                    <span className="px-3 py-2 text-sm font-medium text-slate-600">
+                      {currentPage} / {totalPages}
+                    </span>
+                    <button
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                      disabled={currentPage === totalPages}
+                    >
+                      {labels.next}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Edit Rule Modal */}
           {showRuleForm ? (
-            <div 
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
               onClick={(e) => {
                 if (e.target === e.currentTarget) {
-                  setEditingRuleId(null);
-                  setShowRuleForm(false);
-                  setRuleForm({
-                    fromArea: "",
-                    toArea: "",
-                    tripType: "PICKUP",
-                    vehicleTypeId: "",
-                    basePriceJpy: 0,
-                    nightFeeJpy: 0,
-                    urgentFeeJpy: 0
-                  });
+                  attemptClosePricingRuleForm();
                 }
               }}
             >
-              <div 
-                className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              <div
+                className="w-full max-w-4xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_36px_120px_-56px_rgba(15,23,42,0.45)]"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="p-6">
-                  <div className="font-semibold text-lg mb-4">
-                    {editingRuleId ? labels.editRule : labels.addRule}
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-3">
-                    <label className="text-sm block">
-                      <div className="text-slate-700 mb-1">{labels.fromArea}</div>
-                      <input
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        value={ruleForm.fromArea}
-                        onChange={(e) => setRuleForm({ ...ruleForm, fromArea: e.target.value })}
-                        placeholder={labels.fromAreaPlaceholder}
-                      />
-                    </label>
-
-                    <label className="text-sm block">
-                      <div className="text-slate-700 mb-1">{labels.toArea}</div>
-                      <input
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        value={ruleForm.toArea}
-                        onChange={(e) => setRuleForm({ ...ruleForm, toArea: e.target.value })}
-                        placeholder={labels.toAreaPlaceholder}
-                      />
-                    </label>
-
-                    <label className="text-sm block">
-                      <div className="text-slate-700 mb-1">{labels.tripType}</div>
-                      <select
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        value={ruleForm.tripType}
-                        onChange={(e) => setRuleForm({ ...ruleForm, tripType: e.target.value as any })}
-                      >
-                        <option value="PICKUP">{labels.tripTypes.PICKUP}</option>
-                        <option value="DROPOFF">{labels.tripTypes.DROPOFF}</option>
-                        <option value="POINT_TO_POINT">{labels.tripTypes.POINT_TO_POINT}</option>
-                      </select>
-                    </label>
-
-                    <label className="text-sm block">
-                      <div className="text-slate-700 mb-1">{labels.vehicleType}</div>
-                      <select
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        value={ruleForm.vehicleTypeId}
-                        onChange={(e) => setRuleForm({ ...ruleForm, vehicleTypeId: e.target.value })}
-                      >
-                        <option value="">{labels.selectVehicle}</option>
-                        {vehicleTypes.map((v) => (
-                          <option key={v.id} value={v.id}>
-                            {labels.vehicles[v.name] || v.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="text-sm block">
-                      <div className="text-slate-700 mb-1">{labels.basePrice}</div>
-                      <input
-                        type="number"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        value={ruleForm.basePriceJpy}
-                        onChange={(e) => setRuleForm({ ...ruleForm, basePriceJpy: Number(e.target.value) })}
-                      />
-                    </label>
-
-                    <label className="text-sm block">
-                      <div className="text-slate-700 mb-1">{labels.nightFee}</div>
-                      <input
-                        type="number"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        value={ruleForm.nightFeeJpy}
-                        onChange={(e) => setRuleForm({ ...ruleForm, nightFeeJpy: Number(e.target.value) })}
-                      />
-                    </label>
-
-                    <label className="text-sm block">
-                      <div className="text-slate-700 mb-1">{labels.urgentFee}</div>
-                      <input
-                        type="number"
-                        className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                        value={ruleForm.urgentFeeJpy}
-                        onChange={(e) => setRuleForm({ ...ruleForm, urgentFeeJpy: Number(e.target.value) })}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="mt-6 flex gap-2 justify-end">
+                <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-brand-50/40 px-6 py-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-lg font-semibold text-slate-900">
+                        {editingRuleId ? labels.editRule : labels.addRule}
+                      </div>
+                      <div className="mt-1 text-sm text-slate-500">{labels.pricingSubtitle}</div>
+                    </div>
                     <button
-                      className="px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 disabled:opacity-60"
-                      disabled={pricingSaving}
-                      onClick={() => {
-                        setEditingRuleId(null);
-                        setShowRuleForm(false);
-                        setRuleForm({
-                          fromArea: "",
-                          toArea: "",
-                          tripType: "PICKUP",
-                          vehicleTypeId: "",
-                          basePriceJpy: 0,
-                          nightFeeJpy: 0,
-                          urgentFeeJpy: 0
-                        });
-                      }}
+                      type="button"
+                      onClick={attemptClosePricingRuleForm}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+                      aria-label={labels.close}
                     >
-                      {labels.cancel}
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
-                    <button
-                      className="px-4 py-2 rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-60"
-                      disabled={pricingSaving}
-                      onClick={savePricingRule}
-                    >
-                      {pricingSaving
-                        ? editingRuleId
-                          ? labels.updating
-                          : labels.creating
-                        : editingRuleId
+                  </div>
+                </div>
+
+                <div className="max-h-[calc(92vh-92px)] overflow-y-auto px-6 py-6">
+                  <div className="space-y-5">
+                    <section className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="mb-4 text-sm font-semibold text-slate-900">{labels.routeSectionTitle}</div>
+                      <div className="grid gap-4 xl:grid-cols-2">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="mb-4 flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-slate-900">{labels.fromArea}</div>
+                            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
+                              <button
+                                type="button"
+                                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                                  routeMode.from === "suggested"
+                                    ? "bg-brand-100 text-brand-800 shadow-sm"
+                                    : "text-slate-500 hover:text-slate-700"
+                                }`}
+                                onClick={() => {
+                                  setRouteMode((prev) => ({ ...prev, from: "suggested" }));
+                                  if (ruleForm.fromArea && !isSuggestedLocationValue(ruleForm.fromArea)) {
+                                    setRuleForm((prev) => ({ ...prev, fromArea: "" }));
+                                  }
+                                }}
+                              >
+                                {labels.suggested}
+                              </button>
+                              <button
+                                type="button"
+                                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                                  routeMode.from === "custom"
+                                    ? "bg-brand-100 text-brand-800 shadow-sm"
+                                    : "text-slate-500 hover:text-slate-700"
+                                }`}
+                                onClick={() => setRouteMode((prev) => ({ ...prev, from: "custom" }))}
+                              >
+                                {labels.custom}
+                              </button>
+                            </div>
+                          </div>
+
+                          {routeMode.from === "suggested" ? (
+                            <select
+                              className={pricingFilterFieldClass}
+                              value={isSuggestedLocationValue(ruleForm.fromArea) ? normalizePricingRouteValue(ruleForm.fromArea) : ""}
+                              onChange={(e) => setRuleForm((prev) => ({ ...prev, fromArea: e.target.value }))}
+                            >
+                              <option value="">{labels.selectKnownLocation}</option>
+                              {pricingLocationOptions.map((option) => (
+                                <option key={`from-${option.value}`} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <>
+                              <input
+                                className={pricingFilterFieldClass}
+                                value={ruleForm.fromArea}
+                                onChange={(e) => setRuleForm((prev) => ({ ...prev, fromArea: e.target.value }))}
+                                placeholder={labels.fromAreaPlaceholder}
+                              />
+                              <div className="mt-2 text-xs text-slate-500">{labels.customLocationHint}</div>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                          <div className="mb-4 flex items-center justify-between gap-3">
+                            <div className="text-sm font-semibold text-slate-900">{labels.toArea}</div>
+                            <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1">
+                              <button
+                                type="button"
+                                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                                  routeMode.to === "suggested"
+                                    ? "bg-brand-100 text-brand-800 shadow-sm"
+                                    : "text-slate-500 hover:text-slate-700"
+                                }`}
+                                onClick={() => {
+                                  setRouteMode((prev) => ({ ...prev, to: "suggested" }));
+                                  if (ruleForm.toArea && !isSuggestedLocationValue(ruleForm.toArea)) {
+                                    setRuleForm((prev) => ({ ...prev, toArea: "" }));
+                                  }
+                                }}
+                              >
+                                {labels.suggested}
+                              </button>
+                              <button
+                                type="button"
+                                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                                  routeMode.to === "custom"
+                                    ? "bg-brand-100 text-brand-800 shadow-sm"
+                                    : "text-slate-500 hover:text-slate-700"
+                                }`}
+                                onClick={() => setRouteMode((prev) => ({ ...prev, to: "custom" }))}
+                              >
+                                {labels.custom}
+                              </button>
+                            </div>
+                          </div>
+
+                          {routeMode.to === "suggested" ? (
+                            <select
+                              className={pricingFilterFieldClass}
+                              value={isSuggestedLocationValue(ruleForm.toArea) ? normalizePricingRouteValue(ruleForm.toArea) : ""}
+                              onChange={(e) => setRuleForm((prev) => ({ ...prev, toArea: e.target.value }))}
+                            >
+                              <option value="">{labels.selectKnownLocation}</option>
+                              {pricingLocationOptions.map((option) => (
+                                <option key={`to-${option.value}`} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <>
+                              <input
+                                className={pricingFilterFieldClass}
+                                value={ruleForm.toArea}
+                                onChange={(e) => setRuleForm((prev) => ({ ...prev, toArea: e.target.value }))}
+                                placeholder={labels.toAreaPlaceholder}
+                              />
+                              <div className="mt-2 text-xs text-slate-500">{labels.customLocationHint}</div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+
+                    <section className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="mb-4 text-sm font-semibold text-slate-900">{labels.tripVehicleSection}</div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.tripType}</div>
+                          <select
+                            className={pricingFilterFieldClass}
+                            value={ruleForm.tripType}
+                            onChange={(e) =>
+                              setRuleForm((prev) => ({ ...prev, tripType: e.target.value as PricingTripType }))
+                            }
+                          >
+                            <option value="PICKUP">{labels.tripTypes.PICKUP}</option>
+                            <option value="DROPOFF">{labels.tripTypes.DROPOFF}</option>
+                            <option value="POINT_TO_POINT">{labels.tripTypes.POINT_TO_POINT}</option>
+                          </select>
+                        </label>
+
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.vehicleType}</div>
+                          <select
+                            className={pricingFilterFieldClass}
+                            value={ruleForm.vehicleTypeId}
+                            onChange={(e) => setRuleForm((prev) => ({ ...prev, vehicleTypeId: e.target.value }))}
+                          >
+                            <option value="">{labels.selectVehicle}</option>
+                            {vehicleTypes.map((vehicle) => (
+                              <option key={vehicle.id} value={vehicle.id}>
+                                {labels.vehicles[vehicle.name] || vehicle.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </section>
+
+                    <section className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="mb-4 text-sm font-semibold text-slate-900">{labels.pricingSectionTitle}</div>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.basePrice}</div>
+                          <input
+                            type="number"
+                            className={pricingFilterFieldClass}
+                            value={ruleForm.basePriceJpy}
+                            onChange={(e) =>
+                              setRuleForm((prev) => ({ ...prev, basePriceJpy: Number(e.target.value || 0) }))
+                            }
+                          />
+                        </label>
+
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.nightFee}</div>
+                          <input
+                            type="number"
+                            className={pricingFilterFieldClass}
+                            value={ruleForm.nightFeeJpy}
+                            onChange={(e) =>
+                              setRuleForm((prev) => ({ ...prev, nightFeeJpy: Number(e.target.value || 0) }))
+                            }
+                          />
+                        </label>
+
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.urgentFee}</div>
+                          <input
+                            type="number"
+                            className={pricingFilterFieldClass}
+                            value={ruleForm.urgentFeeJpy}
+                            onChange={(e) =>
+                              setRuleForm((prev) => ({ ...prev, urgentFeeJpy: Number(e.target.value || 0) }))
+                            }
+                          />
+                        </label>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+
+                <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+                  <button
+                    className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                    disabled={pricingSaving}
+                    onClick={attemptClosePricingRuleForm}
+                  >
+                    {labels.cancel}
+                  </button>
+                  <button
+                    className="rounded-2xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-100 transition hover:bg-brand-700 disabled:opacity-60"
+                    disabled={pricingSaving}
+                    onClick={() => void savePricingRule()}
+                  >
+                    {pricingSaving
+                      ? editingRuleId
+                        ? labels.updating
+                        : labels.creating
+                      : editingRuleId
                         ? labels.update
                         : labels.create}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {showImportModal && importPreview ? (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setShowImportModal(false);
+                }
+              }}
+            >
+              <div
+                className="w-full max-w-6xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_36px_120px_-56px_rgba(15,23,42,0.45)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-brand-50/40 px-6 py-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-lg font-semibold text-slate-900">{labels.importTitle}</div>
+                      <div className="mt-1 text-sm text-slate-500">{labels.importSubtitle}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowImportModal(false)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+                      aria-label={labels.close}
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
+                </div>
+
+                <div className="max-h-[calc(92vh-92px)] overflow-y-auto px-6 py-6">
+                  <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                    <div className="text-xs font-semibold tracking-[0.06em] text-slate-500">{labels.fileName}</div>
+                    <div className="mt-1.5 text-sm font-medium text-slate-900">{importPreview.fileName}</div>
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="mb-3 text-sm font-semibold text-slate-900">{labels.importSummary}</div>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="text-xs text-slate-500">{labels.importRows}</div>
+                        <div className="mt-2 text-2xl font-semibold text-slate-900">{importPreview.summary.totalRows}</div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="text-xs text-slate-500">{labels.importValidRows}</div>
+                        <div className="mt-2 text-2xl font-semibold text-emerald-700">{importPreview.summary.validRows}</div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="text-xs text-slate-500">{labels.importInvalidRows}</div>
+                        <div className="mt-2 text-2xl font-semibold text-rose-700">{importPreview.summary.errorRows}</div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="text-xs text-slate-500">{labels.importCreateCount}</div>
+                        <div className="mt-2 text-2xl font-semibold text-brand-700">{importPreview.summary.createCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="text-xs text-slate-500">{labels.importUpdateCount}</div>
+                        <div className="mt-2 text-2xl font-semibold text-amber-700">{importPreview.summary.updateCount}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-6 xl:grid-cols-[0.95fr,1.45fr]">
+                    <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="text-sm font-semibold text-slate-900">{labels.importErrors}</div>
+                        <div className="text-xs text-slate-500">{importPreview.errors.length}</div>
+                      </div>
+                      <div className="space-y-3">
+                        {importPreview.errors.length === 0 ? (
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                            {labels.noErrorsFound}
+                          </div>
+                        ) : (
+                          importPreview.errors.map((errorRow, index) => (
+                            <div
+                              key={`${errorRow.rowNumber}-${errorRow.field}-${index}`}
+                              className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3"
+                            >
+                              <div className="text-xs font-semibold text-rose-600">
+                                {labels.rowNumber} {errorRow.rowNumber}
+                              </div>
+                              <div className="mt-1.5 text-sm text-rose-700">{errorRow.reason}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="text-sm font-semibold text-slate-900">{labels.importValidRows}</div>
+                        <div className="text-xs text-slate-500">{importPreview.rows.length}</div>
+                      </div>
+                      {importPreview.rows.length === 0 ? (
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                          {labels.importNoValidRows}
+                        </div>
+                      ) : (
+                        <div className="overflow-hidden rounded-2xl border border-slate-200">
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full text-sm">
+                              <thead className="bg-slate-50/90 text-left text-slate-500">
+                                <tr className="border-b border-slate-200">
+                                  <th className="px-4 py-3 text-xs font-semibold tracking-[0.06em]">{labels.rowNumber}</th>
+                                  <th className="px-4 py-3 text-xs font-semibold tracking-[0.06em]">{labels.route}</th>
+                                  <th className="px-4 py-3 text-xs font-semibold tracking-[0.06em]">{labels.tripType}</th>
+                                  <th className="px-4 py-3 text-xs font-semibold tracking-[0.06em]">{labels.vehicleType}</th>
+                                  <th className="px-4 py-3 text-xs font-semibold tracking-[0.06em]">{labels.notesLabel}</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 bg-white">
+                                {importPreview.rows.map((row) => (
+                                  <tr key={`${row.rowNumber}-${row.fromArea}-${row.toArea}-${row.vehicleTypeId}`}>
+                                    <td className="px-4 py-4 text-slate-600">{row.rowNumber}</td>
+                                    <td className="px-4 py-4">
+                                      <div className="font-medium text-slate-900">
+                                        {getPricingDisplayValue(row.fromArea)} {"->"} {getPricingDisplayValue(row.toArea)}
+                                      </div>
+                                      <div className="mt-1 text-xs text-slate-500">
+                                        {row.fromArea} {"->"} {row.toArea}
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-4">
+                                      <div className="flex flex-wrap gap-2">
+                                        <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
+                                          {getTripTypeLabel(row.tripType)}
+                                        </span>
+                                        <span
+                                          className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                                            row.action === "create"
+                                              ? "bg-brand-50 text-brand-700"
+                                              : "bg-amber-50 text-amber-700"
+                                          }`}
+                                        >
+                                          {row.action === "create" ? labels.willCreate : labels.willUpdate}
+                                        </span>
+                                      </div>
+                                    </td>
+                                    <td className="px-4 py-4 text-slate-700">
+                                      {labels.vehicles[row.vehicleTypeName] || row.vehicleTypeName}
+                                    </td>
+                                    <td className="px-4 py-4 text-slate-500">
+                                      {row.notes.length > 0 ? row.notes.join(" / ") : labels.notProvided}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+                  <button
+                    className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                    onClick={() => setShowImportModal(false)}
+                  >
+                    {labels.cancel}
+                  </button>
+                  <button
+                    className="rounded-2xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-100 transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={importSubmitting || importPreview.rows.length === 0 || importPreview.errors.length > 0}
+                    onClick={() => void commitPricingImport()}
+                  >
+                    {importSubmitting ? labels.importing : labels.confirmImport}
+                  </button>
                 </div>
               </div>
             </div>

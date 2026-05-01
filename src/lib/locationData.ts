@@ -119,6 +119,36 @@ export const VEHICLE_NAMES = {
   BUS: "大巴车（团体）"
 };
 
+const AIRPORT_ALIASES: Record<AirportCode, string[]> = {
+  NRT: ["narita", "narita airport", "narita international airport", "成田机场", "成田国际机场"],
+  HND: ["haneda", "haneda airport", "tokyo haneda airport", "羽田机场", "东京羽田机场"],
+  KIX: ["kansai", "kansai airport", "kansai international airport", "关西机场", "关西国际机场"],
+  NGO: ["centrair", "chubu", "chubu airport", "chubu centrair", "chubu centrair international airport", "中部机场", "中部国际机场"],
+  CTS: ["new chitose", "new chitose airport", "sapporo airport", "新千岁机场"]
+};
+
+function normalizeLocationInput(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[()]/g, " ")
+    .replace(/[._/,()-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function matchesAlias(normalizedInput: string, alias: string) {
+  return normalizedInput === alias || normalizedInput.startsWith(`${alias} `);
+}
+
+function getAirportAliases(airport: AirportTerminal) {
+  return [
+    airport.code.toLowerCase(),
+    normalizeLocationInput(airport.name.en),
+    normalizeLocationInput(airport.name.zh),
+    ...AIRPORT_ALIASES[airport.code].map(normalizeLocationInput),
+  ];
+}
+
 export function findAirportByCode(code: string): AirportTerminal | undefined {
   return AIRPORTS.find((a) => a.code === code.toUpperCase());
 }
@@ -127,88 +157,149 @@ export function findAreaByCode(code: string): PopularArea | undefined {
   return POPULAR_AREAS.find((a) => a.code === code);
 }
 
+export function findAreaByInput(input: string): PopularArea | undefined {
+  const normalized = normalizeLocationInput(input);
+  if (!normalized) return undefined;
+
+  return POPULAR_AREAS.find((area) => {
+    const aliases = [
+      normalizeLocationInput(area.code),
+      normalizeLocationInput(area.name.zh),
+      normalizeLocationInput(area.name.en),
+    ];
+    return aliases.some((alias) => normalized === alias);
+  });
+}
+
+export function findHotelByInput(input: string): PopularHotel | undefined {
+  const normalized = normalizeLocationInput(input);
+  if (!normalized) return undefined;
+
+  return POPULAR_HOTELS.find((hotel) => {
+    const aliases = [
+      normalizeLocationInput(hotel.code),
+      normalizeLocationInput(hotel.name.zh),
+      normalizeLocationInput(hotel.name.en),
+    ];
+    return aliases.some((alias) => normalized === alias);
+  });
+}
+
+export function findAirportByInput(input: string): AirportTerminal | undefined {
+  const raw = input.trim();
+  if (!raw) return undefined;
+
+  const directCode = raw.toUpperCase().match(/^([A-Z]{3})(?:\b|\s|[-_/])/);
+  if (directCode) {
+    const airport = findAirportByCode(directCode[1]);
+    if (airport) return airport;
+  }
+
+  const byBareCode = findAirportByCode(raw);
+  if (byBareCode) return byBareCode;
+
+  const normalized = normalizeLocationInput(raw);
+
+  for (const airport of AIRPORTS) {
+    const aliases = getAirportAliases(airport);
+    if (aliases.some((alias) => matchesAlias(normalized, alias))) {
+      return airport;
+    }
+  }
+
+  return undefined;
+}
+
+export function isKnownPricingLocationInput(input: string) {
+  return Boolean(findAirportByInput(input) || findAreaByInput(input) || findHotelByInput(input));
+}
+
 export function searchLocations(query: string, locale: string = "zh"): Array<PopularArea | PopularHotel> {
   const q = query.toLowerCase().trim();
   if (!q) return [];
   const isZh = locale.startsWith("zh");
   const results: Array<PopularArea | PopularHotel> = [];
-  // 搜索区域
+
   for (const area of POPULAR_AREAS) {
     const name = isZh ? area.name.zh : area.name.en;
     if (name.toLowerCase().includes(q) || area.code.toLowerCase().includes(q)) {
       results.push(area);
     }
   }
-  // 搜索酒店
+
   for (const hotel of POPULAR_HOTELS) {
     const name = isZh ? hotel.name.zh : hotel.name.en;
     if (name.toLowerCase().includes(q) || hotel.code.toLowerCase().includes(q)) {
       results.push(hotel);
     }
   }
+
   return results.slice(0, 10);
 }
 
 /**
  * 从选中的地点字符串中提取用于匹配报价规则的代码
- * 1. 如果是机场格式 "NRT T1 - ..." -> 返回 "NRT"
- * 2. 如果是酒店名，尝试找到对应的区域代码
- * 3. 否则返回原字符串或匹配到的区域代码
+ * 1. 机场相关输入统一归一化为机场代码，例如 NRT / Narita airport -> NRT
+ * 2. 热门酒店返回其所属区域代码
+ * 3. 热门区域统一归一化为区域代码
+ * 4. 未知区域按原始文本（trim 后）保留，支持自定义价格区域
  */
 export function getPricingAreaCode(location: string): string {
-  if (!location) return "";
+  const trimmed = location.trim();
+  if (!trimmed) return "";
 
-  // 1. 检查是否为机场格式 (e.g., "NRT T1 - ...")
-  const airportMatch = location.match(/^([A-Z]{3})\s/);
-  if (airportMatch) {
-    return airportMatch[1];
+  const airport = findAirportByInput(trimmed);
+  if (airport) {
+    return airport.code;
   }
 
-  // 2. 检查是否为热门区域的代码或名称
-  const area = POPULAR_AREAS.find(
-    (a) => a.code === location || a.name.zh === location || a.name.en === location
-  );
+  const area = findAreaByInput(trimmed);
   if (area) return area.code;
 
-  // 3. 检查是否为酒店
-  const hotel = POPULAR_HOTELS.find(
-    (h) => h.code === location || h.name.zh === location || h.name.en === location
-  );
-  if (hotel) return hotel.area; // 返回酒店所在的区域代码
+  const hotel = findHotelByInput(trimmed);
+  if (hotel) return hotel.area;
 
-  return location;
+  return trimmed;
 }
 
 /**
  * 将存储在 URL 或数据库中的原始位置名称本地化
  */
 export function getLocalizedLocation(location: string, locale: string = "zh"): string {
-  if (!location) return "";
+  const trimmed = location.trim();
+  if (!trimmed) return "";
+
   const isZh = locale.startsWith("zh");
 
-  // 1. 尝试匹配机场
-  // 格式 A: "NRT T1 - 成田机场 第一航站楼"
-  // 格式 B: "NRT T1" (常见于默认值)
-  const airportMatch = location.match(/^([A-Z]{3})\s+([A-Z0-9]+)(\s+-\s+(.+))?$/);
+  const airportMatch = trimmed.match(/^([A-Z]{3})\s+([A-Z0-9]+)(\s+-\s+(.+))?$/);
   if (airportMatch) {
-    const [_, code, terminalCode, fullSuffix, originalName] = airportMatch;
-    const airport = AIRPORTS.find(a => a.code === code);
+    const [, code, terminalCode] = airportMatch;
+    const airport = findAirportByCode(code);
     if (airport) {
-      const terminal = airport.terminals.find(t => t.code === terminalCode);
+      const terminal = airport.terminals.find((item) => item.code === terminalCode);
       const airportName = isZh ? airport.name.zh : airport.name.en;
-      const terminalName = terminal ? (isZh ? terminal.name.zh : terminal.name.en) : terminalCode;
+      const terminalName = terminal
+        ? (isZh ? terminal.name.zh : terminal.name.en)
+        : terminalCode;
       return `${code} ${terminalCode} - ${airportName} ${terminalName}`;
     }
   }
 
-  // 2. 尝试匹配区域
-  const area = POPULAR_AREAS.find(a => a.code === location || a.name.zh === location || a.name.en === location);
-  if (area) return isZh ? area.name.zh : area.name.en;
+  const airport = findAirportByInput(trimmed);
+  if (airport) {
+    const airportName = isZh ? airport.name.zh : airport.name.en;
+    return `${airportName} (${airport.code})`;
+  }
 
-  // 3. 尝试匹配酒店
-  const hotel = POPULAR_HOTELS.find(h => h.code === location || h.name.zh === location || h.name.en === location);
-  if (hotel) return isZh ? hotel.name.zh : hotel.name.en;
+  const area = findAreaByInput(trimmed);
+  if (area) {
+    return isZh ? area.name.zh : area.name.en;
+  }
 
-  return location;
+  const hotel = findHotelByInput(trimmed);
+  if (hotel) {
+    return isZh ? hotel.name.zh : hotel.name.en;
+  }
+
+  return trimmed;
 }
-
