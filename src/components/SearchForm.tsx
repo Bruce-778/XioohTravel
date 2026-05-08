@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LocationSelector } from "./LocationSelector";
 
@@ -44,24 +44,254 @@ function formatDateTimeLocalValue(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
-function formatDateTimePreview(value: string, locale: string) {
+function formatDatePartValue(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function parseDateTimeLocalParts(value: string) {
   const [datePart, timePart] = value.split("T");
-  if (!datePart || !timePart) return value;
+  if (!datePart || !timePart) return null;
 
   const [year, month, day] = datePart.split("-").map(Number);
   const [hour, minute] = timePart.split(":").map(Number);
 
   if ([year, month, day, hour, minute].some((part) => Number.isNaN(part))) {
+    return null;
+  }
+
+  return {
+    year,
+    month,
+    day,
+    hour,
+    minute,
+  };
+}
+
+function formatDateFieldValue(datePart: string, locale: string) {
+  const [year, month, day] = datePart.split("-").map(Number);
+  if ([year, month, day].some((part) => Number.isNaN(part))) {
+    return datePart;
+  }
+
+  return new Intl.DateTimeFormat(locale.startsWith("zh") ? "zh-CN" : "en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(year, month - 1, day));
+}
+
+function getWeekdayLabels(locale: string) {
+  const formatter = new Intl.DateTimeFormat(locale.startsWith("zh") ? "zh-CN" : "en-GB", {
+    weekday: locale.startsWith("zh") ? "narrow" : "short",
+  });
+
+  return Array.from({ length: 7 }, (_, index) =>
+    formatter.format(new Date(2024, 0, 7 + index))
+  );
+}
+
+function getCalendarDays(viewMonth: Date) {
+  const firstDayOfMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
+  const gridStart = new Date(
+    firstDayOfMonth.getFullYear(),
+    firstDayOfMonth.getMonth(),
+    1 - firstDayOfMonth.getDay()
+  );
+  const today = new Date();
+  const todayKey = formatDatePartValue(today);
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
+    return {
+      date,
+      key: formatDatePartValue(date),
+      inCurrentMonth: date.getMonth() === viewMonth.getMonth(),
+      isToday: formatDatePartValue(date) === todayKey,
+    };
+  });
+}
+
+function DateTimePicker({
+  value,
+  locale,
+  onChange,
+  ariaLabel,
+}: {
+  value: string;
+  locale: string;
+  onChange: (nextValue: string) => void;
+  ariaLabel: string;
+}) {
+  const parsed = useMemo(() => parseDateTimeLocalParts(value), [value]);
+  const datePart = value.split("T")[0] ?? "";
+  const timePart = value.split("T")[1]?.slice(0, 5) ?? "10:00";
+  const [isOpen, setIsOpen] = useState(false);
+  const [viewMonth, setViewMonth] = useState(() =>
+    parsed ? new Date(parsed.year, parsed.month - 1, 1) : new Date()
+  );
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const isZh = locale.startsWith("zh");
+  const calendarLocale = isZh ? "zh-CN" : "en-GB";
+  const weekdayLabels = useMemo(() => getWeekdayLabels(locale), [locale]);
+  const calendarDays = useMemo(() => getCalendarDays(viewMonth), [viewMonth]);
+  const monthTitle = useMemo(
+    () =>
+      new Intl.DateTimeFormat(calendarLocale, {
+        month: isZh ? "long" : "long",
+        year: "numeric",
+      }).format(viewMonth),
+    [calendarLocale, isZh, viewMonth]
+  );
+
+  useEffect(() => {
+    if (parsed) {
+      setViewMonth(new Date(parsed.year, parsed.month - 1, 1));
+    }
+  }, [parsed?.year, parsed?.month]);
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  function updateDate(nextDatePart: string) {
+    onChange(`${nextDatePart}T${timePart}`);
+    setIsOpen(false);
+  }
+
+  function updateTime(nextTimePart: string) {
+    const fallbackDate = datePart || formatDatePartValue(new Date());
+    onChange(`${fallbackDate}T${nextTimePart}`);
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_170px]">
+      <div ref={rootRef} className="relative">
+        <button
+          type="button"
+          className="input-field flex items-center justify-between text-left"
+          onClick={() => setIsOpen((open) => !open)}
+          aria-label={ariaLabel}
+          aria-expanded={isOpen}
+        >
+          <span className="text-slate-900">
+            {datePart
+              ? formatDateFieldValue(datePart, locale)
+              : (isZh ? "选择日期" : "Select date")}
+          </span>
+          <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+        </button>
+
+        {isOpen ? (
+          <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[320px] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.35)]">
+            <div className="mb-4 flex items-center justify-between">
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                onClick={() => setViewMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
+                aria-label={isZh ? "上个月" : "Previous month"}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="text-base font-semibold text-slate-900">{monthTitle}</div>
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                onClick={() => setViewMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+                aria-label={isZh ? "下个月" : "Next month"}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-[0.06em] text-slate-400">
+              {weekdayLabels.map((weekday) => (
+                <div key={weekday} className="py-2">
+                  {weekday}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-1 grid grid-cols-7 gap-1">
+              {calendarDays.map((day) => {
+                const isSelected = day.key === datePart;
+                return (
+                  <button
+                    key={day.key}
+                    type="button"
+                    onClick={() => updateDate(day.key)}
+                    className={cn(
+                      "flex h-10 items-center justify-center rounded-xl text-sm transition-colors",
+                      isSelected
+                        ? "bg-brand-600 font-semibold text-white shadow-sm"
+                        : day.inCurrentMonth
+                          ? "text-slate-700 hover:bg-slate-100"
+                          : "text-slate-300 hover:bg-slate-50",
+                      day.isToday && !isSelected && "border border-brand-200 bg-brand-50/60 text-brand-700"
+                    )}
+                  >
+                    {day.date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <label className="block">
+        <span className="sr-only">{isZh ? "时间" : "Time"}</span>
+        <input
+          type="time"
+          step={300}
+          lang={calendarLocale}
+          className="input-field"
+          value={timePart}
+          onChange={(event) => updateTime(event.target.value)}
+          aria-label={`${ariaLabel} ${isZh ? "时间" : "time"}`}
+        />
+      </label>
+    </div>
+  );
+}
+
+function formatDateTimePreview(value: string, locale: string) {
+  const parsed = parseDateTimeLocalParts(value);
+  if (!parsed) {
     return value;
   }
 
-  const formatted = new Intl.DateTimeFormat(locale.startsWith("zh") ? "zh-CN" : "en-US", {
+  const formatted = new Intl.DateTimeFormat(locale.startsWith("zh") ? "zh-CN" : "en-GB", {
     year: "numeric",
     month: locale.startsWith("zh") ? "numeric" : "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit"
-  }).format(new Date(year, month - 1, day, hour, minute));
+  }).format(new Date(parsed.year, parsed.month - 1, parsed.day, parsed.hour, parsed.minute));
 
   return `${formatted} JST`;
 }
@@ -178,7 +408,7 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
         />
       </div>
 
-      <label className="block">
+      <div className="block">
         <div className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
           <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -186,13 +416,11 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
           {labels?.pickupTime ?? "Pickup Time"}
           <span className="ml-1 text-xs font-normal text-slate-500">(JST)</span>
         </div>
-        <input
-          type="datetime-local"
-          className="input-field"
+        <DateTimePicker
           value={pickupTime}
-          onChange={(e) => setPickupTime(e.target.value)}
-          lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
-          aria-label={labels?.pickupTime ?? "Pickup Time"}
+          onChange={setPickupTime}
+          locale={locale}
+          ariaLabel={labels?.pickupTime ?? "Pickup Time"}
         />
         {labels?.timezoneHint ? (
           <div className="mt-1.5 text-xs text-slate-500 flex items-center gap-1">
@@ -207,7 +435,7 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
             {(labels?.selectedTime ?? "Selected time")}: {formatDateTimePreview(pickupTime, locale)}
           </div>
         ) : null}
-      </label>
+      </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <label className="block">
