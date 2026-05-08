@@ -47,6 +47,17 @@ export default async function VehiclesPage({
   }
 
   const q = parsed.data;
+  const bookNowUrl = `/?${new URLSearchParams({
+    tripType: q.tripType,
+    fromArea: q.fromArea,
+    toArea: q.toArea,
+    pickupTime: q.pickupTime,
+    passengers: String(q.passengers),
+    childSeats: String(q.childSeats),
+    luggageSmall: String(q.luggageSmall),
+    luggageMedium: String(q.luggageMedium),
+    luggageLarge: String(q.luggageLarge),
+  }).toString()}#book-now`;
   const pickupTime = new Date(q.pickupTime);
   const now = new Date();
   const isUrgent = isUrgentOrder(now, pickupTime);
@@ -85,21 +96,32 @@ export default async function VehiclesPage({
             {q.luggageSmall}/{q.luggageMedium}/{q.luggageLarge}
           </div>
         </div>
-        <div className="text-sm">
-          {isUrgent ? (
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-              {t("vehicles.urgent")}
-            </span>
-          ) : (
-            <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              {t("vehicles.nonUrgent")}
-            </span>
-          )}
-          {isNight ? (
-            <span className="ml-2 inline-flex items-center px-3 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
-              {t("vehicles.night")}
-            </span>
-          ) : null}
+        <div className="flex flex-col items-start gap-2 text-sm md:items-end">
+          <Link
+            href={bookNowUrl}
+            className="inline-flex items-center gap-2 rounded-xl border border-brand-100 bg-brand-50 px-4 py-2 font-semibold text-brand-700 transition hover:border-brand-200 hover:bg-brand-100"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            {t("vehicles.backBookNow")}
+          </Link>
+          <div>
+            {isUrgent ? (
+              <span className="inline-flex items-center px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                {t("vehicles.urgent")}
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                {t("vehicles.nonUrgent")}
+              </span>
+            )}
+            {isNight ? (
+              <span className="ml-2 inline-flex items-center px-3 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+                {t("vehicles.night")}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -120,8 +142,16 @@ export default async function VehiclesPage({
             q.luggageLarge > v.luggage_large;
 
           const checkoutUrl = `/checkout?${new URLSearchParams({
-            ...params as any,
-            vehicleTypeId: v.id
+            tripType: q.tripType,
+            fromArea: q.fromArea,
+            toArea: q.toArea,
+            pickupTime: q.pickupTime,
+            passengers: String(q.passengers),
+            childSeats: String(q.childSeats),
+            luggageSmall: String(q.luggageSmall),
+            luggageMedium: String(q.luggageMedium),
+            luggageLarge: String(q.luggageLarge),
+            vehicleTypeId: v.id,
           }).toString()}`;
 
           return (

@@ -119,7 +119,7 @@ export default async function HomePage() {
           </div>
 
           {/* Right - Search Form */}
-          <div className="relative animate-slide-up lg:sticky lg:top-24">
+          <div id="book-now" className="relative scroll-mt-24 animate-slide-up lg:sticky lg:top-24">
             <div className="absolute -inset-1 bg-gradient-to-r from-brand-600 to-blue-600 rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-1000"></div>
             <div className="relative card-elevated p-6 sm:p-8">
               <div className="flex items-center gap-3 mb-2">

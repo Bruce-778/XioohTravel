@@ -2,6 +2,8 @@ import Stripe from "stripe";
 
 let stripeClient: Stripe | null = null;
 
+export const STRIPE_CHECKOUT_SESSION_EXPIRES_IN_SECONDS = 30 * 60;
+
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
@@ -45,6 +47,7 @@ type CreateCheckoutSessionInput = {
   pickupLocation: string;
   dropoffLocation: string;
   pickupTime: Date;
+  cancelUrl?: string;
   req?: Request;
 };
 
@@ -156,7 +159,10 @@ export async function createBookingCheckoutSession(input: CreateCheckoutSessionI
     client_reference_id: input.bookingId,
     customer_email: input.contactEmail,
     success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/orders?email=${encodeURIComponent(input.contactEmail)}&bookingId=${encodeURIComponent(input.bookingId)}&payment=cancelled`,
+    cancel_url:
+      input.cancelUrl ??
+      `${baseUrl}/orders?email=${encodeURIComponent(input.contactEmail)}&bookingId=${encodeURIComponent(input.bookingId)}&payment=cancelled`,
+    expires_at: Math.floor(Date.now() / 1000) + STRIPE_CHECKOUT_SESSION_EXPIRES_IN_SECONDS,
     line_items: lineItems,
     metadata: {
       bookingId: input.bookingId,

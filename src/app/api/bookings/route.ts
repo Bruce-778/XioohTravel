@@ -9,7 +9,41 @@ import {
   deleteBookingIfPending,
   linkBookingEmailToUser,
 } from "@/lib/bookings";
-import { createBookingCheckoutSession } from "@/lib/stripe";
+import { createBookingCheckoutSession, getAppBaseUrl } from "@/lib/stripe";
+
+type CheckoutCancelData = {
+  tripType: "PICKUP" | "DROPOFF" | "POINT_TO_POINT";
+  fromArea: string;
+  toArea: string;
+  pickupTime: string;
+  passengers: number;
+  childSeats: number;
+  luggageSmall: number;
+  luggageMedium: number;
+  luggageLarge: number;
+  vehicleTypeId: string;
+};
+
+function buildCheckoutCancelUrl(req: Request, bookingId: string, data: CheckoutCancelData) {
+  const checkoutUrl = new URL("/checkout", getAppBaseUrl(req));
+  const params = new URLSearchParams({
+    tripType: data.tripType,
+    fromArea: data.fromArea,
+    toArea: data.toArea,
+    pickupTime: data.pickupTime,
+    passengers: String(data.passengers),
+    childSeats: String(data.childSeats),
+    luggageSmall: String(data.luggageSmall),
+    luggageMedium: String(data.luggageMedium),
+    luggageLarge: String(data.luggageLarge),
+    vehicleTypeId: data.vehicleTypeId,
+    payment: "cancelled",
+    bookingId,
+  });
+
+  checkoutUrl.search = params.toString();
+  return checkoutUrl.toString();
+}
 
 export async function POST(req: Request) {
   const { t } = await getT();
@@ -41,6 +75,7 @@ export async function POST(req: Request) {
       pickupLocation: data.pickupLocation,
       dropoffLocation: data.dropoffLocation,
       pickupTime: created.snapshot.pickupTime,
+      cancelUrl: buildCheckoutCancelUrl(req, created.bookingId, data),
       req,
     });
     hasCheckoutSession = true;

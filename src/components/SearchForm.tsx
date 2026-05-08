@@ -35,6 +35,20 @@ type Labels = {
   selectedTime?: string;
 };
 
+const SEARCH_DRAFT_STORAGE_KEY = "xioohtravel.searchDraft";
+
+type SearchDraft = {
+  tripType: TripType;
+  fromArea: string;
+  toArea: string;
+  pickupTime: string;
+  passengers: number;
+  childSeats: number;
+  luggageSmall: number;
+  luggageMedium: number;
+  luggageLarge: number;
+};
+
 function cn(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
@@ -42,6 +56,130 @@ function cn(...xs: Array<string | false | null | undefined>) {
 function formatDateTimeLocalValue(date: Date) {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function createDefaultPickupTime() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(10, 0, 0, 0);
+  return formatDateTimeLocalValue(tomorrow);
+}
+
+function createDefaultSearchDraft(): SearchDraft {
+  return {
+    tripType: "PICKUP",
+    fromArea: "NRT T1",
+    toArea: "Shinjuku",
+    pickupTime: createDefaultPickupTime(),
+    passengers: 2,
+    childSeats: 0,
+    luggageSmall: 1,
+    luggageMedium: 0,
+    luggageLarge: 0,
+  };
+}
+
+function isTripType(value: unknown): value is TripType {
+  return value === "PICKUP" || value === "DROPOFF" || value === "POINT_TO_POINT";
+}
+
+function parseIntegerInRange(value: unknown, fallback: number, min: number, max: number) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(min, Math.min(max, Math.trunc(parsed)));
+}
+
+function hasSearchDraftParams(params: URLSearchParams) {
+  return [
+    "tripType",
+    "fromArea",
+    "toArea",
+    "pickupTime",
+    "passengers",
+    "childSeats",
+    "luggageSmall",
+    "luggageMedium",
+    "luggageLarge",
+  ].some((key) => params.has(key));
+}
+
+function getSearchDraftFromParams(params: URLSearchParams): SearchDraft | null {
+  if (!hasSearchDraftParams(params)) {
+    return null;
+  }
+
+  const defaults = createDefaultSearchDraft();
+  const tripTypeParam = params.get("tripType");
+
+  return {
+    tripType: isTripType(tripTypeParam) ? tripTypeParam : defaults.tripType,
+    fromArea: params.get("fromArea") || defaults.fromArea,
+    toArea: params.get("toArea") || defaults.toArea,
+    pickupTime: params.get("pickupTime") || defaults.pickupTime,
+    passengers: parseIntegerInRange(params.get("passengers"), defaults.passengers, 1, 50),
+    childSeats: parseIntegerInRange(params.get("childSeats"), defaults.childSeats, 0, 10),
+    luggageSmall: parseIntegerInRange(params.get("luggageSmall"), defaults.luggageSmall, 0, 20),
+    luggageMedium: parseIntegerInRange(params.get("luggageMedium"), defaults.luggageMedium, 0, 20),
+    luggageLarge: parseIntegerInRange(params.get("luggageLarge"), defaults.luggageLarge, 0, 20),
+  };
+}
+
+function getStoredString(value: unknown, fallback: string) {
+  return typeof value === "string" ? value : fallback;
+}
+
+function normalizeStoredSearchDraft(value: Partial<SearchDraft>): SearchDraft {
+  const defaults = createDefaultSearchDraft();
+
+  return {
+    tripType: isTripType(value.tripType) ? value.tripType : defaults.tripType,
+    fromArea: getStoredString(value.fromArea, defaults.fromArea),
+    toArea: getStoredString(value.toArea, defaults.toArea),
+    pickupTime: getStoredString(value.pickupTime, defaults.pickupTime),
+    passengers: parseIntegerInRange(value.passengers, defaults.passengers, 1, 50),
+    childSeats: parseIntegerInRange(value.childSeats, defaults.childSeats, 0, 10),
+    luggageSmall: parseIntegerInRange(value.luggageSmall, defaults.luggageSmall, 0, 20),
+    luggageMedium: parseIntegerInRange(value.luggageMedium, defaults.luggageMedium, 0, 20),
+    luggageLarge: parseIntegerInRange(value.luggageLarge, defaults.luggageLarge, 0, 20),
+  };
+}
+
+function readStoredSearchDraft(): SearchDraft | null {
+  try {
+    const rawDraft = window.sessionStorage.getItem(SEARCH_DRAFT_STORAGE_KEY);
+    if (!rawDraft) {
+      return null;
+    }
+
+    return normalizeStoredSearchDraft(JSON.parse(rawDraft) as Partial<SearchDraft>);
+  } catch {
+    return null;
+  }
+}
+
+function writeSearchDraft(draft: SearchDraft) {
+  try {
+    window.sessionStorage.setItem(SEARCH_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // Local storage is only used to make browser/back navigation friendlier.
+  }
+}
+
+function buildSearchQuery(draft: SearchDraft) {
+  const p = new URLSearchParams();
+  p.set("tripType", draft.tripType);
+  p.set("fromArea", draft.fromArea);
+  p.set("toArea", draft.toArea);
+  p.set("pickupTime", draft.pickupTime);
+  p.set("passengers", String(draft.passengers));
+  p.set("childSeats", String(draft.childSeats));
+  p.set("luggageSmall", String(draft.luggageSmall));
+  p.set("luggageMedium", String(draft.luggageMedium));
+  p.set("luggageLarge", String(draft.luggageLarge));
+  return p.toString();
 }
 
 function formatDatePartValue(date: Date) {
@@ -302,46 +440,54 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
   const [fromArea, setFromArea] = useState("");
   const [toArea, setToArea] = useState("");
   const [pickupTime, setPickupTime] = useState("");
-
-  useEffect(() => {
-    if (!fromArea && !toArea) {
-      if (tripType === "PICKUP") {
-        setFromArea("NRT T1");
-        setToArea("Shinjuku");
-      } else if (tripType === "DROPOFF") {
-        setFromArea("Shinjuku");
-        setToArea("NRT T1");
-      }
-    }
-  }, [tripType, fromArea, toArea]);
-
-  useEffect(() => {
-    if (!pickupTime) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(10, 0, 0, 0);
-      setPickupTime(formatDateTimeLocalValue(tomorrow));
-    }
-  }, []);
   const [passengers, setPassengers] = useState(2);
   const [childSeats, setChildSeats] = useState(0);
   const [luggageSmall, setLuggageSmall] = useState(1);
   const [luggageMedium, setLuggageMedium] = useState(0);
   const [luggageLarge, setLuggageLarge] = useState(0);
+  const [hasHydratedSearchDraft, setHasHydratedSearchDraft] = useState(false);
 
-  const query = useMemo(() => {
-    const p = new URLSearchParams();
-    p.set("tripType", tripType);
-    p.set("fromArea", fromArea);
-    p.set("toArea", toArea);
-    p.set("pickupTime", pickupTime);
-    p.set("passengers", String(passengers));
-    p.set("childSeats", String(childSeats));
-    p.set("luggageSmall", String(luggageSmall));
-    p.set("luggageMedium", String(luggageMedium));
-    p.set("luggageLarge", String(luggageLarge));
-    return p.toString();
-  }, [tripType, fromArea, toArea, pickupTime, passengers, childSeats, luggageSmall, luggageMedium, luggageLarge]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const draft =
+      getSearchDraftFromParams(params) ?? readStoredSearchDraft() ?? createDefaultSearchDraft();
+
+    setTripType(draft.tripType);
+    setFromArea(draft.fromArea);
+    setToArea(draft.toArea);
+    setPickupTime(draft.pickupTime);
+    setPassengers(draft.passengers);
+    setChildSeats(draft.childSeats);
+    setLuggageSmall(draft.luggageSmall);
+    setLuggageMedium(draft.luggageMedium);
+    setLuggageLarge(draft.luggageLarge);
+    setHasHydratedSearchDraft(true);
+  }, []);
+
+  const currentDraft = useMemo<SearchDraft>(
+    () => ({
+      tripType,
+      fromArea,
+      toArea,
+      pickupTime,
+      passengers,
+      childSeats,
+      luggageSmall,
+      luggageMedium,
+      luggageLarge,
+    }),
+    [tripType, fromArea, toArea, pickupTime, passengers, childSeats, luggageSmall, luggageMedium, luggageLarge]
+  );
+
+  useEffect(() => {
+    if (!hasHydratedSearchDraft) {
+      return;
+    }
+
+    writeSearchDraft(currentDraft);
+  }, [currentDraft, hasHydratedSearchDraft]);
+
+  const query = useMemo(() => buildSearchQuery(currentDraft), [currentDraft]);
 
   const tripTypeLabels: Record<TripType, string> = {
     PICKUP: labels?.pickup ?? "Pickup",
@@ -354,6 +500,7 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
+        writeSearchDraft(currentDraft);
         router.push(`/vehicles?${query}`);
       }}
     >

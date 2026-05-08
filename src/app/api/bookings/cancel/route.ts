@@ -24,11 +24,16 @@ export async function POST(req: Request) {
     if (booking.status === "CANCELLED") {
       return NextResponse.json({ ok: true });
     }
+    if (booking.status === "COMPLETED") {
+      return NextResponse.json({ error: t("api.cancelPast") }, { status: 400 });
+    }
 
-    const now = new Date();
-    const decision = canUserCancel(now, new Date(booking.pickup_time), booking.is_urgent);
-    if (!decision.ok) {
-      return NextResponse.json({ error: t(decision.reason) }, { status: 400 });
+    if (booking.status !== "PENDING_PAYMENT") {
+      const now = new Date();
+      const decision = canUserCancel(now, new Date(booking.pickup_time), booking.is_urgent);
+      if (!decision.ok) {
+        return NextResponse.json({ error: t(decision.reason) }, { status: 400 });
+      }
     }
 
     await db.query(

@@ -388,6 +388,14 @@ export function OrdersClient({
                     const displayStatus = labels.statuses[row.status] || row.status;
                     const displayTripType = labels.tripTypes[row.tripType] || row.tripType;
                     const isRetryable = row.status === "PENDING_PAYMENT";
+                    const msUntilPickup = new Date(row.pickupTime).getTime() - Date.now();
+                    const isInsidePaidCancellationLock =
+                      Number.isFinite(msUntilPickup) && msUntilPickup <= 24 * 60 * 60 * 1000;
+                    const canRequestCancel = row.status !== "CANCELLED" && row.status !== "COMPLETED";
+                    const isCancelBlockedByUrgency =
+                      canRequestCancel &&
+                      row.status !== "PENDING_PAYMENT" &&
+                      (row.isUrgent || isInsidePaidCancellationLock);
                     const isExpanded = expandedBookingId === row.id;
 
                     const summaryRow = (
@@ -431,8 +439,8 @@ export function OrdersClient({
                                 {actionLoadingId === row.id ? labels.retryingPayment : labels.retryPayment}
                               </button>
                             ) : null}
-                            {row.status !== "CANCELLED" && row.status !== "COMPLETED" ? (
-                              row.isUrgent ? (
+                            {canRequestCancel ? (
+                              isCancelBlockedByUrgency ? (
                                 <span className="text-xs text-slate-400 cursor-help" title={labels.urgentHint}>
                                   {labels.cancel}
                                 </span>

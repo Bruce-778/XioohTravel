@@ -14,7 +14,6 @@ import {
   getPhoneCountryLabel,
   getPhoneCountryName,
 } from "@/lib/phoneCountryCodes";
-import { LocationSelector } from "./LocationSelector";
 
 type Preset = {
   tripType: "PICKUP" | "DROPOFF" | "POINT_TO_POINT";
@@ -66,6 +65,7 @@ type Labels = {
   meetAndGreetFee: string;
   total: string;
   paymentTip: string;
+  paymentCancelledTip: string;
   addOns: string;
   phoneCountryCode: string;
   phoneLocalNumber: string;
@@ -164,6 +164,37 @@ function SummarySectionHeader({
   );
 }
 
+function ReadOnlyLocationField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="text-sm">
+      <div className="mb-1.5 font-semibold text-slate-900">{label}</div>
+      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900">
+        <svg
+          className="mt-0.5 h-4 w-4 shrink-0 text-brand-600"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.8}
+            d="M12 21s7-4.35 7-11a7 7 0 10-14 0c0 6.65 7 11 7 11z"
+          />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 10.5h.01" />
+        </svg>
+        <span className="font-medium leading-relaxed break-words">{value}</span>
+      </div>
+    </div>
+  );
+}
+
 function clampCount(value: string, max: number) {
   const nextValue = Number(value);
   if (Number.isNaN(nextValue)) return 0;
@@ -178,6 +209,24 @@ function buildContactPhone(countryCode: string, localNumber: string) {
   return `${countryCode} ${localNumber.trim().replace(/\s+/g, " ")}`.trim();
 }
 
+const CHECKOUT_DRAFT_STORAGE_PREFIX = "xioohtravel.checkoutDraft.";
+
+type CheckoutDraft = {
+  flightNumber: string;
+  contactName: string;
+  phoneCountryCode: string;
+  phoneCountryRegionCode: string;
+  phoneLocalNumber: string;
+  contactEmail: string;
+  contactNote: string;
+  childSeats: number;
+  meetAndGreetSign: boolean;
+};
+
+function getCheckoutDraftStorageKey(bookingId: string) {
+  return `${CHECKOUT_DRAFT_STORAGE_PREFIX}${bookingId}`;
+}
+
 export function CheckoutForm({
   preset,
   summary,
@@ -189,8 +238,8 @@ export function CheckoutForm({
   labels: Labels;
   locale?: string;
 }) {
-  const [pickupLocation, setPickupLocation] = useState(preset.defaultPickupLocation);
-  const [dropoffLocation, setDropoffLocation] = useState(preset.defaultDropoffLocation);
+  const pickupLocation = preset.defaultPickupLocation;
+  const dropoffLocation = preset.defaultDropoffLocation;
   const [flightNumber, setFlightNumber] = useState("");
   const [contactName, setContactName] = useState("");
   const [phoneCountryCode, setPhoneCountryCode] = useState("");
@@ -203,6 +252,7 @@ export function CheckoutForm({
   const [meetAndGreetSign, setMeetAndGreetSign] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPaymentCancelledReturn, setIsPaymentCancelledReturn] = useState(false);
   const phoneFieldRef = useRef<HTMLDivElement>(null);
   const phoneLocalInputRef = useRef<HTMLInputElement>(null);
 
@@ -252,6 +302,46 @@ export function CheckoutForm({
       document.removeEventListener("mousedown", handlePhoneCountryOutsideClick);
       document.removeEventListener("keydown", handlePhoneCountryEscape);
     };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") !== "cancelled") {
+      return;
+    }
+
+    setIsPaymentCancelledReturn(true);
+
+    const bookingId = params.get("bookingId");
+    if (!bookingId) {
+      return;
+    }
+
+    try {
+      const draftJson = window.sessionStorage.getItem(getCheckoutDraftStorageKey(bookingId));
+      if (!draftJson) {
+        return;
+      }
+
+      const draft = JSON.parse(draftJson) as Partial<CheckoutDraft>;
+      if (typeof draft.flightNumber === "string") setFlightNumber(draft.flightNumber);
+      if (typeof draft.contactName === "string") setContactName(draft.contactName);
+      if (typeof draft.phoneCountryCode === "string") setPhoneCountryCode(draft.phoneCountryCode);
+      if (typeof draft.phoneCountryRegionCode === "string") {
+        setPhoneCountryRegionCode(draft.phoneCountryRegionCode);
+      }
+      if (typeof draft.phoneLocalNumber === "string") setPhoneLocalNumber(draft.phoneLocalNumber);
+      if (typeof draft.contactEmail === "string") setContactEmail(draft.contactEmail);
+      if (typeof draft.contactNote === "string") setContactNote(draft.contactNote);
+      if (typeof draft.childSeats === "number") {
+        setChildSeats(Math.max(0, Math.min(10, Math.trunc(draft.childSeats))));
+      }
+      if (typeof draft.meetAndGreetSign === "boolean") {
+        setMeetAndGreetSign(draft.meetAndGreetSign);
+      }
+    } catch {
+      // A corrupted local draft should never block checkout.
+    }
   }, []);
 
   const pricing = useMemo(() => {
@@ -309,7 +399,6 @@ export function CheckoutForm({
       flightNumber,
       contactName,
       phoneCountryCode,
-      phoneCountryRegionCode,
       phoneLocalNumber,
       contactEmail,
       contactNote,
@@ -332,15 +421,29 @@ export function CheckoutForm({
     });
   }
 
+  function saveCheckoutDraft(bookingId: string) {
+    try {
+      const draft: CheckoutDraft = {
+        flightNumber,
+        contactName,
+        phoneCountryCode,
+        phoneCountryRegionCode,
+        phoneLocalNumber,
+        contactEmail,
+        contactNote,
+        childSeats,
+        meetAndGreetSign,
+      };
+
+      window.sessionStorage.setItem(getCheckoutDraftStorageKey(bookingId), JSON.stringify(draft));
+    } catch {
+      // sessionStorage is a convenience for returning from Stripe; checkout can continue without it.
+    }
+  }
+
   function validatePayload() {
     if (preset.tripType === "PICKUP" && !flightNumber.trim()) {
       return labels.flightNumberRequired;
-    }
-    if (pickupLocation.trim().length < 2) {
-      return labels.pickupLocationRequired;
-    }
-    if (dropoffLocation.trim().length < 2) {
-      return labels.dropoffLocationRequired;
     }
     if (!contactName.trim()) {
       return labels.contactNameRequired;
@@ -389,6 +492,9 @@ export function CheckoutForm({
             if (!data?.checkoutUrl) {
               throw new Error(labels.orderFailed);
             }
+            if (typeof data.bookingId === "string") {
+              saveCheckoutDraft(data.bookingId);
+            }
             window.location.assign(data.checkoutUrl);
           } catch (err: any) {
             setError(err?.message ?? labels.orderFailed);
@@ -397,6 +503,12 @@ export function CheckoutForm({
           }
         }}
       >
+        {isPaymentCancelledReturn ? (
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+            {labels.paymentCancelledTip}
+          </div>
+        ) : null}
+
         <FormSection title={labels.transferDetails}>
           <Field label={labels.flightNumber}>
             <input
@@ -411,31 +523,10 @@ export function CheckoutForm({
             />
           </Field>
 
-          <LocationSelector
-            value={pickupLocation}
-            onChange={(value) => {
-              clearError();
-              setPickupLocation(value);
-            }}
-            label={labels.pickupLocation}
-            placeholder={preset.tripType === "PICKUP" ? labels.placeholderAirport : labels.placeholderLocation}
-            isAirport={preset.tripType === "PICKUP"}
-            locale={locale}
-            tip={labels.locationTip}
-          />
-
-          <LocationSelector
-            value={dropoffLocation}
-            onChange={(value) => {
-              clearError();
-              setDropoffLocation(value);
-            }}
-            label={labels.dropoffLocation}
-            placeholder={preset.tripType === "DROPOFF" ? labels.placeholderAirport : labels.placeholderLocation}
-            isAirport={preset.tripType === "DROPOFF"}
-            locale={locale}
-            tip={labels.locationTip}
-          />
+          <div className="space-y-4">
+            <ReadOnlyLocationField label={labels.pickupLocation} value={pickupLocation} />
+            <ReadOnlyLocationField label={labels.dropoffLocation} value={dropoffLocation} />
+          </div>
         </FormSection>
 
         <FormSection title={labels.addOns}>

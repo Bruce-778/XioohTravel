@@ -12,11 +12,11 @@ export function isUrgentOrder(now: Date, pickupTime: Date) {
 }
 
 export function canUserCancel(now: Date, pickupTime: Date, isUrgent: boolean) {
-  if (isUrgent) {
-    return { ok: false as const, reason: "api.cancelUrgent" };
-  }
   if (pickupTime.getTime() <= now.getTime()) {
     return { ok: false as const, reason: "api.cancelPast" };
+  }
+  if (isUrgent || isUrgentOrder(now, pickupTime)) {
+    return { ok: false as const, reason: "api.cancelUrgent" };
   }
   return { ok: true as const, reason: null };
 }
@@ -26,4 +26,3 @@ export function computeNightFee(pickupTime: Date) {
   const h = pickupTime.getHours();
   return h >= 22 || h < 6;
 }
-

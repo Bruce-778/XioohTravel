@@ -52,6 +52,17 @@ export default async function CheckoutPage({
   }
 
   const q = parsed.data;
+  const vehiclesBackUrl = `/vehicles?${new URLSearchParams({
+    tripType: q.tripType,
+    fromArea: q.fromArea,
+    toArea: q.toArea,
+    pickupTime: q.pickupTime,
+    passengers: String(q.passengers),
+    childSeats: String(q.childSeats),
+    luggageSmall: String(q.luggageSmall),
+    luggageMedium: String(q.luggageMedium),
+    luggageLarge: String(q.luggageLarge),
+  }).toString()}`;
   const pickupTime = new Date(q.pickupTime);
   const now = new Date();
   const isUrgent = isUrgentOrder(now, pickupTime);
@@ -118,9 +129,20 @@ export default async function CheckoutPage({
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("checkout.title")}</h1>
-        <p className="text-slate-600 mt-1">{t("checkout.subtitle")}</p>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("checkout.title")}</h1>
+          <p className="text-slate-600 mt-1">{t("checkout.subtitle")}</p>
+        </div>
+        <Link
+          href={vehiclesBackUrl}
+          className="inline-flex w-fit items-center gap-2 rounded-xl border border-brand-100 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:border-brand-200 hover:bg-brand-100"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          {t("checkout.backVehicles")}
+        </Link>
       </div>
       <CheckoutForm
         preset={{
@@ -163,6 +185,7 @@ export default async function CheckoutPage({
           meetAndGreetFee: t("checkout.meetAndGreetFee"),
           total: t("checkout.total"),
           paymentTip: t("checkout.paymentTip"),
+          paymentCancelledTip: t("checkout.paymentCancelledTip"),
           addOns: t("checkout.addOns"),
           phoneCountryCode: t("form.phoneCountryCode"),
           phoneLocalNumber: t("form.phoneLocalNumber"),
