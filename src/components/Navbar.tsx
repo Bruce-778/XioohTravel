@@ -55,12 +55,12 @@ export function Navbar({
             href="/" 
             className="group flex min-w-0 items-center gap-3 py-1 transition-opacity duration-200 hover:opacity-85"
           >
-            <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl sm:h-12 sm:w-12">
+            <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-2xl sm:h-14 sm:w-14">
               <Image
-                src="/brand/xioohtravel-avatar.jpg"
+                src="/brand/favicon.jpg"
                 alt={BRAND_NAME}
                 fill
-                sizes="48px"
+                sizes="(min-width: 640px) 56px, 52px"
                 priority
                 className="object-cover"
               />

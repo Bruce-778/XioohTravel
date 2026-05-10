@@ -9,7 +9,29 @@ export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
   return {
     title: `${t("brand.name")} - ${t("brand.tagline")}`,
-    description: t("home.subtitle")
+    description: t("home.subtitle"),
+    icons: {
+      icon: [
+        {
+          url: "/brand/favicon.jpg",
+          type: "image/jpeg",
+          sizes: "2200x2200"
+        }
+      ],
+      shortcut: [
+        {
+          url: "/brand/favicon.jpg",
+          type: "image/jpeg"
+        }
+      ],
+      apple: [
+        {
+          url: "/brand/favicon.jpg",
+          type: "image/jpeg",
+          sizes: "2200x2200"
+        }
+      ]
+    }
   };
 }
 
@@ -54,4 +76,3 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     </html>
   );
 }
-

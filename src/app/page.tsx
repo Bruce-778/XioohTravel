@@ -1,9 +1,11 @@
+import Image from "next/image";
 import { SearchForm } from "@/components/SearchForm";
 import { AuthLink } from "@/components/AuthLink";
 import { HomeFaqSection } from "@/components/HomeFaqSection";
 import { HomePromoGallery } from "@/components/HomePromoGallery";
 import { HomeTrustSection } from "@/components/HomeTrustSection";
 import { getT } from "@/lib/i18n";
+import coverpageImage from "../../coverpage.png";
 
 export default async function HomePage() {
   const { t, locale } = await getT();
@@ -58,6 +60,14 @@ export default async function HomePage() {
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
           {/* Left Content */}
           <div className="space-y-6 animate-fade-in">
+            <Image
+              src={coverpageImage}
+              alt="XioohTravel"
+              priority
+              sizes="(min-width: 1024px) 540px, calc(100vw - 32px)"
+              className="block h-32 w-full max-w-[540px] -translate-x-6 object-cover object-center opacity-95 sm:h-[150px] lg:h-[164px]"
+            />
+
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur-sm border border-brand-200/50 shadow-sm text-sm font-medium text-brand-700">
               <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
               {t("home.badge")}
