@@ -6,18 +6,15 @@ export async function TravelShowcase() {
   const cards = [
     {
       title: t("showcase.tokyo.title"),
-      desc: t("showcase.tokyo.desc"),
-      src: "/travel/tokyo.svg"
+      src: "/myorders/myorders_1.png"
     },
     {
       title: t("showcase.kyoto.title"),
-      desc: t("showcase.kyoto.desc"),
-      src: "/travel/kyoto.svg"
+      src: "/myorders/myorders_2.png"
     },
     {
       title: t("showcase.osaka.title"),
-      desc: t("showcase.osaka.desc"),
-      src: "/travel/osaka.svg"
+      src: "/myorders/myorders_3.png"
     }
   ];
 
@@ -35,12 +32,14 @@ export async function TravelShowcase() {
         <div className="mt-5 grid md:grid-cols-3 gap-4">
           {cards.map((c) => (
             <div key={c.title} className="rounded-2xl border border-slate-200 overflow-hidden bg-slate-50">
-              <div className="relative h-40">
-                <Image src={c.src} alt={c.title} fill className="object-cover" />
-              </div>
-              <div className="p-4">
-                <div className="font-semibold">{c.title}</div>
-                <div className="text-sm text-slate-600 mt-1">{c.desc}</div>
+              <div className="relative aspect-[4/3]">
+                <Image
+                  src={c.src}
+                  alt={c.title}
+                  fill
+                  sizes="(min-width: 768px) 33vw, 100vw"
+                  className="object-cover"
+                />
               </div>
             </div>
           ))}
@@ -49,5 +48,3 @@ export async function TravelShowcase() {
     </section>
   );
 }
-
-
