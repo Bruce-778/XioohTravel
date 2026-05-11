@@ -145,9 +145,16 @@ const EMPTY_PRICING_FILTERS: PricingFilterState = {
   vehicleTypeId: "",
 };
 
+type AdminAccessStatus = "checking" | "unauthenticated" | "forbidden" | "requires_secret" | "verified";
+
 type Labels = {
   loginTitle: string;
   loginSubtitle: string;
+  loginRequiredTitle: string;
+  loginRequiredText: string;
+  loginAction: string;
+  forbiddenTitle: string;
+  forbiddenText: string;
   enter: string;
   loading: string;
   orders: string;
@@ -344,6 +351,7 @@ function serializePricingRuleSnapshot(
 
 export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; locale?: string }) {
   const [token, setToken] = useState("");
+  const [adminAccessStatus, setAdminAccessStatus] = useState<AdminAccessStatus>("checking");
   const [loading, setLoading] = useState(false);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingSaving, setPricingSaving] = useState(false);
@@ -675,14 +683,25 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     const checkAdmin = async () => {
       try {
         const res = await fetch("/api/admin/verify-secret", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
         if (res.ok) {
-          // If already verified (cookie exists), just set a dummy token to enable UI
           setToken("verified");
-          // Auto load orders
+          setAdminAccessStatus("verified");
           load();
+          return;
+        }
+
+        setToken("");
+        if (data?.status === "forbidden") {
+          setAdminAccessStatus("forbidden");
+        } else if (data?.status === "requires_secret") {
+          setAdminAccessStatus("requires_secret");
+        } else {
+          setAdminAccessStatus("unauthenticated");
         }
       } catch (err) {
-        // Not verified
+        setToken("");
+        setAdminAccessStatus("unauthenticated");
       } finally {
         setIsChecking(false);
       }
@@ -1024,7 +1043,8 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   }, [editingRow, showImportModal, showRuleForm, ruleForm, routeMode, ruleFormInitialSnapshot, pricingSaving]);
 
   async function handleLogin() {
-    if (!token) return;
+    const trimmedToken = token.trim();
+    if (!trimmedToken) return;
     setLoading(true);
     setError(null);
     try {
@@ -1032,10 +1052,11 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ secret: token })
+        body: JSON.stringify({ secret: trimmedToken })
       });
       if (res.ok) {
         setToken("verified");
+        setAdminAccessStatus("verified");
         if (activeTab === "orders") {
           void load();
         } else {
@@ -1050,6 +1071,12 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
         }
       } else {
         const data = await res.json();
+        if (data?.status === "unauthenticated") {
+          setAdminAccessStatus("unauthenticated");
+        }
+        if (data?.status === "forbidden") {
+          setAdminAccessStatus("forbidden");
+        }
         throw new Error(data.error || "Invalid secret");
       }
     } catch (e: any) {
@@ -1074,6 +1101,44 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     );
   }
 
+  if (adminAccessStatus === "unauthenticated") {
+    return (
+      <div className="min-h-[80vh] flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl shadow-slate-100">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-brand-50">
+            <svg className="h-10 w-10 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14c-4.418 0-8 2.239-8 5v1h16v-1c0-2.761-3.582-5-8-5z" />
+            </svg>
+          </div>
+          <h2 className="mb-2 text-2xl font-bold text-slate-900">{labels.loginRequiredTitle}</h2>
+          <p className="mb-8 text-slate-500">{labels.loginRequiredText}</p>
+          <a
+            href="/login?next=%2Fadmin"
+            className="inline-flex w-full items-center justify-center rounded-2xl bg-brand-600 px-6 py-4 text-lg font-bold text-white shadow-xl shadow-brand-200 transition-all hover:bg-brand-700 active:scale-[0.98]"
+          >
+            {labels.loginAction}
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (adminAccessStatus === "forbidden") {
+    return (
+      <div className="min-h-[80vh] flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl shadow-slate-100">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-rose-50">
+            <svg className="h-10 w-10 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M5.07 19h13.86A2 2 0 0020.66 16L13.73 4a2 2 0 00-3.46 0L3.34 16a2 2 0 001.73 3z" />
+            </svg>
+          </div>
+          <h2 className="mb-2 text-2xl font-bold text-slate-900">{labels.forbiddenTitle}</h2>
+          <p className="text-slate-500">{labels.forbiddenText}</p>
+        </div>
+      </div>
+    );
+  }
+
   if (token !== "verified") {
     return (
       <div className="min-h-[80vh] flex flex-col items-center justify-center p-4">
@@ -1089,15 +1154,15 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
           <div className="relative mb-6">
             <input
                 type="password"
-                value={token === "verified" ? "" : token}
+              value={token === "verified" ? "" : token}
                 onChange={(e) => setToken(e.target.value)}
-                placeholder={token === "verified" ? labels.verified : labels.loginPlaceholder}
+                placeholder={labels.loginPlaceholder}
                 className="w-full px-6 py-4 rounded-2xl border-2 border-slate-200 focus:border-brand-500 outline-none transition-all text-lg font-mono tracking-widest text-center"
               />
           </div>
           <button
             onClick={handleLogin}
-            disabled={loading || token === "verified"}
+            disabled={loading || token === "verified" || !token.trim()}
             className="w-full py-4 rounded-2xl bg-brand-600 text-white font-bold text-lg hover:bg-brand-700 active:scale-[0.98] transition-all disabled:opacity-50 shadow-xl shadow-brand-200"
           >
             {loading ? labels.loading : labels.enter}

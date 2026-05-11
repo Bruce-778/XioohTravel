@@ -8,17 +8,16 @@ export default async function AdminPage() {
   return (
     <div className="mx-auto max-w-[1480px] px-4 py-8 sm:px-6 sm:py-10">
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight">{t("admin.title")}</h2>
-        <div className="text-sm text-slate-600 mt-1">
-          {t("admin.subtitle")}
-        </div>
-      </div>
-      <div className="mt-6">
         <AdminClient
           locale={locale}
           labels={{
             loginTitle: t("admin.loginTitle"),
             loginSubtitle: t("admin.loginSubtitle"),
+            loginRequiredTitle: t("admin.loginRequiredTitle"),
+            loginRequiredText: t("admin.loginRequiredText"),
+            loginAction: t("admin.loginAction"),
+            forbiddenTitle: t("admin.forbiddenTitle"),
+            forbiddenText: t("admin.forbiddenText"),
             enter: t("admin.enter"),
             loading: t("admin.loading"),
             orders: t("admin.orders"),

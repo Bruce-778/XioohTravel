@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { setSession } from "@/lib/auth";
 import { normalizeEmailAddress } from "@/lib/email";
 import { getT } from "@/lib/i18n";
+import { isAdminEmail } from "@/lib/adminConfig";
 
 export async function POST(req: Request) {
   const { t } = await getT();
@@ -43,9 +44,8 @@ export async function POST(req: Request) {
       userId = emailRows[0].user_id;
     }
 
-    // Check if it's admin (simple check, real admin needs secret verification)
-    const { rows: user } = await db.query("SELECT role FROM users WHERE id = $1", [userId]);
-    const role = user[0]?.role || "USER";
+    const role = isAdminEmail(normalizedEmail) ? "ADMIN" : "USER";
+    await db.query("UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2", [role, userId]);
 
     await setSession({ userId, role, email: normalizedEmail });
 

@@ -27,9 +27,10 @@ type LoginLabels = {
 
 type LoginClientProps = {
   labels: LoginLabels;
+  nextPath?: string;
 };
 
-export function LoginClient({ labels }: LoginClientProps) {
+export function LoginClient({ labels, nextPath = "/" }: LoginClientProps) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"email" | "code">("email");
@@ -109,7 +110,7 @@ export function LoginClient({ labels }: LoginClientProps) {
         return;
       }
 
-      window.location.href = "/";
+      window.location.href = nextPath;
     } catch {
       setError(labels.networkError);
     } finally {

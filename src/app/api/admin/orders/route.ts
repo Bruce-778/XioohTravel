@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/adminAuth";
 
 export async function GET(req: Request) {
   const auth = await requireAdmin();
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 401 });
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const { searchParams } = new URL(req.url);
   const dateType = searchParams.get("dateType") || "createdAt";

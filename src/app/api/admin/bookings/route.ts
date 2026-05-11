@@ -7,7 +7,7 @@ import { getT } from "@/lib/i18n";
 export async function POST(req: Request) {
   const { t } = await getT();
   const auth = await requireAdmin();
-  if (!auth.ok) return NextResponse.json({ error: t(auth.error) }, { status: 401 });
+  if (!auth.ok) return NextResponse.json({ error: t(auth.error) }, { status: auth.status });
 
   try {
     const json = await req.json();
