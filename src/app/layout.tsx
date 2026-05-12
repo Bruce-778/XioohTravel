@@ -2,6 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Navbar } from "@/components/Navbar";
 import { MobileNav } from "@/components/MobileNav";
+import { Footer } from "@/components/Footer";
 import { getT } from "@/lib/i18n";
 import { getCurrency } from "@/lib/currency";
 
@@ -64,6 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             currency={currency}
           />
           <main className="flex-1 pb-16 md:pb-0">{children}</main>
+          <Footer />
           <MobileNav 
             labels={{
               home: t("nav.home"),

@@ -22,7 +22,7 @@ export function HomeFaqSection({ title, subtitle, items }: HomeFaqSectionProps) 
   }
 
   return (
-    <section className="pb-20 sm:pb-24">
+    <section id="faq" className="scroll-mt-24 pb-20 sm:pb-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="card-elevated p-6 sm:p-8 lg:p-10">
           <div className="max-w-3xl">
