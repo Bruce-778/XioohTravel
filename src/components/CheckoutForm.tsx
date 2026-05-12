@@ -14,6 +14,11 @@ import {
   getPhoneCountryLabel,
   getPhoneCountryName,
 } from "@/lib/phoneCountryCodes";
+import {
+  isValidFlightNumber,
+  normalizeFlightNumber,
+  normalizeFlightNumberInput,
+} from "@/lib/flightNumber";
 
 type Preset = {
   tripType: "PICKUP" | "DROPOFF" | "POINT_TO_POINT";
@@ -64,8 +69,9 @@ type Labels = {
   meetAndGreet: string;
   meetAndGreetFee: string;
   total: string;
-  paymentTip: string;
   paymentCancelledTip: string;
+  aboutDuration: string;
+  approxDistance: string;
   addOns: string;
   phoneCountryCode: string;
   phoneLocalNumber: string;
@@ -86,6 +92,7 @@ type Labels = {
   locationTip: string;
   placeholderEmail?: string;
   flightNumberRequired: string;
+  flightNumberInvalid: string;
   pickupLocationRequired: string;
   dropoffLocationRequired: string;
   contactNameRequired: string;
@@ -164,6 +171,61 @@ function SummarySectionHeader({
   );
 }
 
+function ItineraryTimeline({
+  pickupTime,
+  pickupLocation,
+  dropoffTime,
+  dropoffLocation,
+  estimate,
+  labels,
+}: {
+  pickupTime: string;
+  pickupLocation: string;
+  dropoffTime: string;
+  dropoffLocation: string;
+  estimate: RouteEstimate | null;
+  labels: Pick<Labels, "aboutDuration" | "approxDistance" | "dropoffLocation">;
+}) {
+  const estimateText = estimate
+    ? `${formatTemplate(labels.aboutDuration, { duration: estimate.durationText })} · ${formatTemplate(
+        labels.approxDistance,
+        { distance: estimate.distanceText }
+      )}`
+    : null;
+
+  return (
+    <div className="relative pl-8">
+      <div className="absolute left-[7px] top-3 bottom-3 w-px bg-slate-300" />
+
+      <div className="relative pb-5">
+        <span className="absolute -left-8 top-0.5 h-4 w-4 rounded-full border border-slate-900 bg-white" />
+        <div className="text-sm font-semibold leading-5 text-slate-900">{pickupTime}</div>
+        <div className="mt-1 text-sm font-bold leading-5 text-slate-950 break-words">
+          {pickupLocation}
+        </div>
+      </div>
+
+      <div className="relative pb-5">
+        {estimateText ? (
+          <div className="text-xs font-semibold leading-5 text-slate-700">{estimateText}</div>
+        ) : (
+          <div className="h-1" />
+        )}
+      </div>
+
+      <div className="relative">
+        <span className="absolute -left-8 top-0.5 h-4 w-4 rounded-full border border-slate-900 bg-white" />
+        <div className="text-sm font-semibold leading-5 text-slate-900">
+          {dropoffTime || labels.dropoffLocation}
+        </div>
+        <div className="mt-1 text-sm font-bold leading-5 text-slate-950 break-words">
+          {dropoffLocation}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ReadOnlyLocationField({
   label,
   value,
@@ -223,6 +285,169 @@ type CheckoutDraft = {
   meetAndGreetSign: boolean;
 };
 
+type RouteEstimate = {
+  distanceText: string;
+  durationText: string;
+  durationSeconds: number;
+};
+
+let googleMapsRouteLoadPromise: Promise<any> | null = null;
+
+function parseJstDateTime(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!match) {
+    return new Date(value);
+  }
+
+  const [, year, month, day, hour, minute] = match;
+  return new Date(
+    Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour) - 9,
+      Number(minute)
+    )
+  );
+}
+
+function formatTimelineDateTime(date: Date, locale: string) {
+  const localeTag = locale.startsWith("zh") ? "zh-CN" : "en";
+  return new Intl.DateTimeFormat(localeTag, {
+    weekday: "short",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Asia/Tokyo",
+  }).format(date);
+}
+
+function formatTemplate(template: string, values: Record<string, string>) {
+  return Object.entries(values).reduce(
+    (current, [key, value]) => current.replaceAll(`{${key}}`, value),
+    template
+  );
+}
+
+function getRouteEstimateAddress(value: string) {
+  return value.toLowerCase().includes("japan") || value.includes("日本")
+    ? value
+    : `${value}, Japan`;
+}
+
+function loadGoogleMapsForRouteEstimate() {
+  if (typeof window === "undefined") {
+    return Promise.reject(new Error("Google Maps is unavailable on the server"));
+  }
+
+  const loadedGoogle = (window as any).google;
+  if (loadedGoogle?.maps?.DistanceMatrixService) {
+    return Promise.resolve(loadedGoogle);
+  }
+
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  if (!apiKey || !apiKey.startsWith("AIza")) {
+    return Promise.reject(new Error("Google Maps API key is not configured"));
+  }
+
+  if (!googleMapsRouteLoadPromise) {
+    googleMapsRouteLoadPromise = new Promise((resolve, reject) => {
+      const complete = () => {
+        const google = (window as any).google;
+        if (google?.maps?.DistanceMatrixService) {
+          resolve(google);
+        } else {
+          reject(new Error("Google Maps failed to load"));
+        }
+      };
+
+      const existingScript = document.getElementById("google-maps-script");
+      if (existingScript) {
+        existingScript.addEventListener("load", complete, { once: true });
+        existingScript.addEventListener(
+          "error",
+          () => reject(new Error("Google Maps script failed to load")),
+          { once: true }
+        );
+
+        const startedAt = Date.now();
+        const interval = window.setInterval(() => {
+          const google = (window as any).google;
+          if (google?.maps?.DistanceMatrixService) {
+            window.clearInterval(interval);
+            resolve(google);
+          } else if (Date.now() - startedAt > 10000) {
+            window.clearInterval(interval);
+            reject(new Error("Google Maps timed out"));
+          }
+        }, 100);
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.id = "google-maps-script";
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = complete;
+      script.onerror = () => reject(new Error("Google Maps script failed to load"));
+      document.head.appendChild(script);
+    }).catch((error) => {
+      googleMapsRouteLoadPromise = null;
+      throw error;
+    });
+  }
+
+  return googleMapsRouteLoadPromise;
+}
+
+function requestRouteEstimate({
+  pickupLocation,
+  dropoffLocation,
+  locale,
+}: {
+  pickupLocation: string;
+  dropoffLocation: string;
+  locale: string;
+}) {
+  return loadGoogleMapsForRouteEstimate().then(
+    (google) =>
+      new Promise<RouteEstimate | null>((resolve) => {
+        const service = new google.maps.DistanceMatrixService();
+        service.getDistanceMatrix(
+          {
+            origins: [getRouteEstimateAddress(pickupLocation)],
+            destinations: [getRouteEstimateAddress(dropoffLocation)],
+            travelMode: google.maps.TravelMode.DRIVING,
+            unitSystem: google.maps.UnitSystem.METRIC,
+            region: "JP",
+            language: locale.startsWith("zh") ? "zh-CN" : "en",
+          },
+          (response: any, status: string) => {
+            if (status !== google.maps.DistanceMatrixStatus.OK) {
+              resolve(null);
+              return;
+            }
+
+            const element = response?.rows?.[0]?.elements?.[0];
+            if (element?.status !== "OK" || !element.duration || !element.distance) {
+              resolve(null);
+              return;
+            }
+
+            resolve({
+              distanceText: element.distance.text,
+              durationText: element.duration.text,
+              durationSeconds: element.duration.value,
+            });
+          }
+        );
+      })
+  );
+}
+
 function getCheckoutDraftStorageKey(bookingId: string) {
   return `${CHECKOUT_DRAFT_STORAGE_PREFIX}${bookingId}`;
 }
@@ -241,6 +466,7 @@ export function CheckoutForm({
   const pickupLocation = preset.defaultPickupLocation;
   const dropoffLocation = preset.defaultDropoffLocation;
   const [flightNumber, setFlightNumber] = useState("");
+  const [isFlightNumberTouched, setIsFlightNumberTouched] = useState(false);
   const [contactName, setContactName] = useState("");
   const [phoneCountryCode, setPhoneCountryCode] = useState("");
   const [phoneCountryRegionCode, setPhoneCountryRegionCode] = useState("");
@@ -253,6 +479,7 @@ export function CheckoutForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPaymentCancelledReturn, setIsPaymentCancelledReturn] = useState(false);
+  const [routeEstimate, setRouteEstimate] = useState<RouteEstimate | null>(null);
   const phoneFieldRef = useRef<HTMLDivElement>(null);
   const phoneLocalInputRef = useRef<HTMLInputElement>(null);
 
@@ -344,6 +571,58 @@ export function CheckoutForm({
     }
   }, []);
 
+  useEffect(() => {
+    let isActive = true;
+
+    setRouteEstimate(null);
+    if (!pickupLocation || !dropoffLocation) {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    requestRouteEstimate({ pickupLocation, dropoffLocation, locale })
+      .then((estimate) => {
+        if (isActive) {
+          setRouteEstimate(estimate);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setRouteEstimate(null);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [dropoffLocation, locale, pickupLocation]);
+
+  const normalizedFlightNumber = useMemo(
+    () => normalizeFlightNumber(flightNumber),
+    [flightNumber]
+  );
+
+  const flightNumberInvalid =
+    normalizedFlightNumber.length > 0 && !isValidFlightNumber(normalizedFlightNumber);
+
+  const pickupDate = useMemo(() => parseJstDateTime(preset.pickupTime), [preset.pickupTime]);
+  const arrivalDate = useMemo(
+    () =>
+      routeEstimate
+        ? new Date(pickupDate.getTime() + routeEstimate.durationSeconds * 1000)
+        : null,
+    [pickupDate, routeEstimate]
+  );
+  const timelinePickupTime = useMemo(
+    () => formatTimelineDateTime(pickupDate, locale),
+    [locale, pickupDate]
+  );
+  const timelineDropoffTime = useMemo(
+    () => (arrivalDate ? formatTimelineDateTime(arrivalDate, locale) : ""),
+    [arrivalDate, locale]
+  );
+
   const pricing = useMemo(() => {
     const childSeatJpy = childSeats * CHILD_SEAT_FEE_JPY;
     const meetAndGreetJpy = meetAndGreetSign ? MEET_AND_GREET_SIGN_FEE_JPY : 0;
@@ -376,7 +655,7 @@ export function CheckoutForm({
       luggageMedium: preset.luggageMedium,
       luggageLarge: preset.luggageLarge,
       vehicleTypeId: preset.vehicleTypeId,
-      flightNumber: flightNumber.trim() || undefined,
+      flightNumber: normalizedFlightNumber || undefined,
       contactName: contactName.trim(),
       contactPhone: buildContactPhone(phoneCountryCode, phoneLocalNumber),
       contactEmail: contactEmail.trim(),
@@ -396,7 +675,7 @@ export function CheckoutForm({
       dropoffLocation,
       childSeats,
       meetAndGreetSign,
-      flightNumber,
+      normalizedFlightNumber,
       contactName,
       phoneCountryCode,
       phoneLocalNumber,
@@ -442,8 +721,11 @@ export function CheckoutForm({
   }
 
   function validatePayload() {
-    if (preset.tripType === "PICKUP" && !flightNumber.trim()) {
+    if (preset.tripType === "PICKUP" && !normalizedFlightNumber) {
       return labels.flightNumberRequired;
+    }
+    if (normalizedFlightNumber && !isValidFlightNumber(normalizedFlightNumber)) {
+      return labels.flightNumberInvalid;
     }
     if (!contactName.trim()) {
       return labels.contactNameRequired;
@@ -474,6 +756,7 @@ export function CheckoutForm({
         onSubmit={async (e) => {
           e.preventDefault();
           setError(null);
+          setIsFlightNumberTouched(true);
           const validationError = validatePayload();
           if (validationError) {
             setError(validationError);
@@ -511,16 +794,32 @@ export function CheckoutForm({
 
         <FormSection title={labels.transferDetails}>
           <Field label={labels.flightNumber}>
-            <input
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-              value={flightNumber}
-              onChange={(e) => {
-                clearError();
-                setFlightNumber(e.target.value);
-              }}
-              placeholder={labels.placeholderFlight}
-              required={preset.tripType === "PICKUP"}
-            />
+            <div className="space-y-1.5">
+              <input
+                className={`w-full rounded-xl border bg-white px-3 py-2 transition ${
+                  isFlightNumberTouched && flightNumberInvalid
+                    ? "border-rose-300 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                    : "border-slate-200 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                }`}
+                value={flightNumber}
+                onChange={(e) => {
+                  clearError();
+                  setFlightNumber(normalizeFlightNumberInput(e.target.value));
+                }}
+                onBlur={() => {
+                  setIsFlightNumberTouched(true);
+                  setFlightNumber((current) => normalizeFlightNumber(current));
+                }}
+                placeholder={labels.placeholderFlight}
+                required={preset.tripType === "PICKUP"}
+                aria-invalid={isFlightNumberTouched && flightNumberInvalid}
+              />
+              {isFlightNumberTouched && flightNumberInvalid ? (
+                <div className="text-xs font-medium text-rose-600">
+                  {labels.flightNumberInvalid}
+                </div>
+              ) : null}
+            </div>
           </Field>
 
           <div className="space-y-4">
@@ -733,11 +1032,16 @@ export function CheckoutForm({
               />
             </div>
             <div className="p-6 space-y-4">
-              <div className="space-y-3">
+              <ItineraryTimeline
+                pickupTime={timelinePickupTime}
+                pickupLocation={pickupLocation}
+                dropoffTime={timelineDropoffTime}
+                dropoffLocation={dropoffLocation}
+                estimate={routeEstimate}
+                labels={labels}
+              />
+              <div className="space-y-3 border-t border-slate-100 pt-4">
                 <SummaryRow label={labels.tripType} value={summary.displayTripType} />
-                <SummaryRow label={labels.pickupTime} value={summary.displayPickupTime} />
-                <SummaryRow label={labels.pickupLocation} value={pickupLocation} />
-                <SummaryRow label={labels.dropoffLocation} value={dropoffLocation} />
                 <SummaryRow label={labels.passengers} value={String(preset.passengers)} />
                 <SummaryRow label={labels.vehicle} value={summary.displayVehicle} />
               </div>
@@ -825,12 +1129,6 @@ export function CheckoutForm({
             </div>
           </div>
 
-          <div className="mt-4 p-4 rounded-xl bg-blue-50 border border-blue-100 flex gap-3">
-            <svg className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-xs text-blue-700 leading-relaxed">{labels.paymentTip}</p>
-          </div>
         </div>
       </div>
     </div>

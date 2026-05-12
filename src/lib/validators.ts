@@ -1,4 +1,22 @@
 import { z } from "zod";
+import { isValidFlightNumber, normalizeFlightNumber } from "@/lib/flightNumber";
+
+const OptionalFlightNumberSchema = z.preprocess(
+  (value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    const normalized = normalizeFlightNumber(value);
+    return normalized || undefined;
+  },
+  z
+    .string()
+    .optional()
+    .refine((value) => !value || isValidFlightNumber(value), {
+      message: "Invalid flight number",
+    })
+);
 
 export const SearchSchema = z.object({
   tripType: z.enum(["PICKUP", "DROPOFF", "POINT_TO_POINT"]),
@@ -26,7 +44,7 @@ export const CreateBookingSchema = z.object({
   luggageMedium: z.coerce.number().int().min(0).max(20).default(0),
   luggageLarge: z.coerce.number().int().min(0).max(20).default(0),
   vehicleTypeId: z.string().min(5),
-  flightNumber: z.string().optional(),
+  flightNumber: OptionalFlightNumberSchema,
   flightNote: z.string().optional(),
   contactName: z.string().min(1),
   contactPhone: z.string().min(5),
