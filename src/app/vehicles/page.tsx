@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { SearchSchema } from "@/lib/validators";
@@ -6,6 +7,7 @@ import { formatDateTimeJST } from "@/lib/timeFormat";
 import { formatMoneyFromJpy, getCurrency } from "@/lib/currency";
 import { getT, getLocale } from "@/lib/i18n";
 import { getPricingAreaCode, getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
+import { getVehicleImageByKey } from "@/lib/vehicleImages";
 
 export default async function VehiclesPage({
   searchParams
@@ -129,6 +131,9 @@ export default async function VehiclesPage({
         {vehicleTypes.map((v) => {
           const rule = ruleByVehicle.get(v.id);
           const hasRule = !!rule;
+          const vehicleKey = vehicleKeyMap[v.name] || v.name;
+          const vehicleLabel = t(`vehicle.${vehicleKey}`);
+          const vehicleImage = getVehicleImageByKey(vehicleKey);
           
           let priceJpy = 0;
           if (hasRule) {
@@ -161,10 +166,22 @@ export default async function VehiclesPage({
                 capacityExceeded || !hasRule ? "opacity-60 grayscale-[0.5]" : "hover:border-brand-300 hover:shadow-md"
               }`}
             >
+              {vehicleImage ? (
+                <div className="relative h-32 w-full shrink-0 md:h-28 md:w-44 lg:h-32 lg:w-52">
+                  <Image
+                    src={vehicleImage}
+                    alt={vehicleLabel}
+                    fill
+                    sizes="(min-width: 1024px) 208px, (min-width: 768px) 176px, calc(100vw - 80px)"
+                    className="object-contain p-1"
+                  />
+                </div>
+              ) : null}
+
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2">
                   <h3 className="text-lg font-bold text-slate-900">
-                    {t(`vehicle.${vehicleKeyMap[v.name] || v.name}`)}
+                    {vehicleLabel}
                   </h3>
                   {v.is_luxury && (
                     <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold uppercase tracking-wider">
@@ -194,7 +211,7 @@ export default async function VehiclesPage({
                 </div>
 
                 <div className="mt-3 text-sm text-slate-500 leading-relaxed max-w-xl">
-                  {t(`vehicle.desc.${vehicleKeyMap[v.name] || v.name}`)}
+                  {t(`vehicle.desc.${vehicleKey}`)}
                 </div>
               </div>
 
