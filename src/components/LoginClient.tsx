@@ -14,13 +14,13 @@ type LoginLabels = {
   invalidCode: string;
   back: string;
   emailHint: string;
-  codeHint: string;
+  codeSentToEmail: string;
+  codeRecentlySent: string;
   networkError: string;
   failedToSend: string;
   testMode: string;
   testCode: string;
   testVisible: string;
-  inboxHint: string;
   emailPlaceholder: string;
   codePlaceholder: string;
 };
@@ -29,6 +29,13 @@ type LoginClientProps = {
   labels: LoginLabels;
   nextPath?: string;
 };
+
+function formatLabel(template: string, values: Record<string, string>) {
+  return Object.entries(values).reduce(
+    (current, [key, value]) => current.replaceAll(`{${key}}`, value),
+    template
+  );
+}
 
 export function LoginClient({ labels, nextPath = "/" }: LoginClientProps) {
   const [email, setEmail] = useState("");
@@ -46,6 +53,15 @@ export function LoginClient({ labels, nextPath = "/" }: LoginClientProps) {
   }, [countdown]);
 
   async function sendCode() {
+    if (loading) {
+      return;
+    }
+
+    if (countdown > 0) {
+      setError(labels.codeRecentlySent);
+      return;
+    }
+
     if (!email || !email.includes("@")) {
       setError(labels.invalidEmail);
       return;
@@ -64,6 +80,9 @@ export function LoginClient({ labels, nextPath = "/" }: LoginClientProps) {
 
       if (!res.ok) {
         setError(data.error || labels.failedToSend);
+        if (res.status === 429) {
+          setCountdown(Number(data.retryAfter) || 60);
+        }
         return;
       }
 
@@ -122,9 +141,12 @@ export function LoginClient({ labels, nextPath = "/" }: LoginClientProps) {
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl">
         <h1 className="mb-2 text-2xl font-bold text-slate-900">{labels.title}</h1>
-        <div className="mb-8 space-y-2 text-slate-500">
-          <p>{step === "email" ? labels.emailHint : `${labels.codeHint} ${email}`}</p>
-          {step === "code" ? <p className="text-sm">{labels.inboxHint}</p> : null}
+        <div className="mb-8 text-slate-500">
+          <p>
+            {step === "email"
+              ? labels.emailHint
+              : formatLabel(labels.codeSentToEmail, { email })}
+          </p>
         </div>
 
         {error ? (
@@ -148,10 +170,10 @@ export function LoginClient({ labels, nextPath = "/" }: LoginClientProps) {
             </div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || countdown > 0}
               className="w-full rounded-xl bg-brand-600 py-3 font-bold text-white shadow-lg shadow-brand-200 transition-colors hover:bg-brand-700 disabled:opacity-50"
             >
-              {loading ? labels.sending : labels.sendCode}
+              {loading ? labels.sending : countdown > 0 ? `${countdown}s` : labels.sendCode}
             </button>
           </form>
         ) : (

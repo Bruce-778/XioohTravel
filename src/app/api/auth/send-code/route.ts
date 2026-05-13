@@ -12,6 +12,8 @@ const SendCodeSchema = z.object({
   email: z.string().trim().email(),
 });
 
+const SEND_CODE_COOLDOWN_SECONDS = 60;
+
 export async function POST(req: Request) {
   const { t } = await getT();
   try {
@@ -26,12 +28,29 @@ export async function POST(req: Request) {
     const expiresInMinutes = 10;
     const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
 
-    await db.query(
-      `INSERT INTO verification_codes (email, code, expires_at) 
-       VALUES ($1, $2, $3) 
-       ON CONFLICT (email) DO UPDATE SET code = $2, expires_at = $3`,
-      [email, code, expiresAt]
+    const upserted = await db.query(
+      `INSERT INTO verification_codes (email, code, expires_at, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (email) DO UPDATE
+         SET code = $2, expires_at = $3, created_at = NOW()
+       WHERE COALESCE(verification_codes.created_at, TIMESTAMPTZ 'epoch')
+         < NOW() - ($4::int * INTERVAL '1 second')
+       RETURNING email`,
+      [email, code, expiresAt, SEND_CODE_COOLDOWN_SECONDS]
     );
+
+    if (upserted.rowCount === 0) {
+      return NextResponse.json(
+        {
+          error: t("auth.codeRecentlySent"),
+          retryAfter: SEND_CODE_COOLDOWN_SECONDS,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(SEND_CODE_COOLDOWN_SECONDS) },
+        }
+      );
+    }
 
     await sendAuthVerificationCodeEmail({
       email,
