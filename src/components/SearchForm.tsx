@@ -321,27 +321,27 @@ function DateTimePicker({
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_170px]">
-      <div ref={rootRef} className="relative">
+    <div className="grid w-full min-w-0 gap-3 sm:grid-cols-[minmax(0,1.35fr)_170px]">
+      <div ref={rootRef} className="relative min-w-0">
         <button
           type="button"
-          className="input-field flex items-center justify-between text-left"
+          className="input-field flex min-w-0 items-center justify-between text-left"
           onClick={() => setIsOpen((open) => !open)}
           aria-label={ariaLabel}
           aria-expanded={isOpen}
         >
-          <span className="text-slate-900">
+          <span className="min-w-0 truncate text-slate-900">
             {datePart
               ? formatDateFieldValue(datePart, locale)
               : (isZh ? "选择日期" : "Select date")}
           </span>
-          <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
         </button>
 
         {isOpen ? (
-          <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[320px] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.35)]">
+          <div className="absolute left-0 top-[calc(100%+10px)] z-30 w-[min(320px,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_60px_-28px_rgba(15,23,42,0.35)]">
             <div className="mb-4 flex items-center justify-between">
               <button
                 type="button"
@@ -401,13 +401,13 @@ function DateTimePicker({
         ) : null}
       </div>
 
-      <label className="block">
+      <label className="block min-w-0">
         <span className="sr-only">{isZh ? "时间" : "Time"}</span>
         <input
           type="time"
           step={300}
           lang={calendarLocale}
-          className="input-field"
+          className="input-field block min-w-0 max-w-full appearance-none text-center sm:text-left"
           value={timePart}
           onChange={(event) => updateTime(event.target.value)}
           aria-label={`${ariaLabel} ${isZh ? "时间" : "time"}`}
