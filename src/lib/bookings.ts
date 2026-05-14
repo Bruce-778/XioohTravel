@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import type Stripe from "stripe";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { normalizeEmailAddress } from "@/lib/email";
 import {
   computeNightFee,
   isUrgentOrder,
@@ -233,16 +234,26 @@ export async function deleteBookingIfPending(bookingId: string) {
 export async function linkBookingEmailToUser(userId: string | undefined, contactEmail: string) {
   if (!userId) return;
 
-  const { rows: linked } = await db.query(
-    "SELECT 1 FROM user_emails WHERE user_id = $1 AND email = $2",
-    [userId, contactEmail]
+  const normalizedEmail = normalizeEmailAddress(contactEmail);
+  if (!normalizedEmail) return;
+
+  const { rows: existing } = await db.query(
+    "SELECT 1 FROM user_emails WHERE LOWER(email) = $1 LIMIT 1",
+    [normalizedEmail]
   );
 
-  if (linked.length > 0) {
+  if (existing.length > 0) {
     return;
   }
 
-  await db.query("INSERT INTO user_emails (user_id, email) VALUES ($1, $2)", [userId, contactEmail]);
+  try {
+    await db.query("INSERT INTO user_emails (user_id, email) VALUES ($1, $2)", [userId, normalizedEmail]);
+  } catch (error: any) {
+    if (error?.code === "23505") {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function getUserAccessibleEmails(userId: string, primaryEmail?: string) {

@@ -8,6 +8,11 @@ function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
 
+function getRequestOrigin(req?: Request) {
+  if (!req) return null;
+  return trimTrailingSlash(new URL(req.url).origin);
+}
+
 export function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is not configured");
@@ -21,12 +26,18 @@ export function getStripe() {
 }
 
 export function getAppBaseUrl(req?: Request) {
+  const requestOrigin = getRequestOrigin(req);
+
+  if (requestOrigin && process.env.NODE_ENV === "development") {
+    return requestOrigin;
+  }
+
   if (process.env.APP_BASE_URL) {
     return trimTrailingSlash(process.env.APP_BASE_URL);
   }
 
-  if (req) {
-    return trimTrailingSlash(new URL(req.url).origin);
+  if (requestOrigin) {
+    return requestOrigin;
   }
 
   throw new Error("APP_BASE_URL is not configured");

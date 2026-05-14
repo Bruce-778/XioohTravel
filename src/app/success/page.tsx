@@ -7,6 +7,7 @@ import {
   getBookingIdFromCheckoutSession,
   syncBookingPaymentFromCheckoutSession,
 } from "@/lib/bookings";
+import { sendPaymentConfirmationEmailIfNeeded } from "@/lib/paymentConfirmation";
 import { retrieveCheckoutSession } from "@/lib/stripe";
 
 export default async function SuccessPage({
@@ -25,7 +26,13 @@ export default async function SuccessPage({
       const checkoutSession = await retrieveCheckoutSession(sessionId);
       bookingId = getBookingIdFromCheckoutSession(checkoutSession) ?? bookingId;
       if (checkoutSession.payment_status === "paid") {
-        await syncBookingPaymentFromCheckoutSession(checkoutSession);
+        const syncedBookingId = await syncBookingPaymentFromCheckoutSession(checkoutSession);
+        await sendPaymentConfirmationEmailIfNeeded(syncedBookingId).catch((error) => {
+          console.error("[success] Failed to send payment confirmation email", {
+            bookingId: syncedBookingId,
+            error,
+          });
+        });
       }
     } catch (error) {
       console.error(error);
