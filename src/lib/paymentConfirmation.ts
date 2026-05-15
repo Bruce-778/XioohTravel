@@ -6,12 +6,22 @@ import {
   sendBookingPaymentConfirmationEmail,
   type PaymentConfirmationBooking,
 } from "@/lib/email";
+import { sendMerchantOrderNotificationIfNeeded } from "@/lib/merchantNotification";
 
 type PaymentConfirmationBookingRow = PaymentConfirmationBooking & {
   stripe_payment_status: string | null;
   payment_confirmation_email_sent_at: Date | null;
   payment_confirmation_email_provider_id: string | null;
 };
+
+async function sendMerchantOrderNotificationSafely(bookingId: string) {
+  await sendMerchantOrderNotificationIfNeeded(bookingId).catch((error) => {
+    console.error("[payment_confirmation] Failed to send merchant order notification", {
+      bookingId,
+      error,
+    });
+  });
+}
 
 async function getBookingForPaymentConfirmation(client: PoolClient, bookingId: string) {
   const result = await client.query(
@@ -77,6 +87,7 @@ export async function sendPaymentConfirmationEmailIfNeeded(bookingId: string) {
         providerId: booking.payment_confirmation_email_provider_id,
       });
       await client.query("COMMIT");
+      await sendMerchantOrderNotificationSafely(bookingId);
       return { sent: false as const, reason: "already_sent" as const };
     }
 
@@ -115,6 +126,8 @@ export async function sendPaymentConfirmationEmailIfNeeded(bookingId: string) {
       bookingId,
       providerId: emailResult.providerId,
     });
+
+    await sendMerchantOrderNotificationSafely(bookingId);
 
     return {
       sent: true as const,

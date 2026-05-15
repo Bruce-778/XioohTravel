@@ -84,6 +84,14 @@ export async function GET(req: Request) {
       ? new Date(b.refund_confirmation_email_sent_at).toISOString()
       : null,
     refundConfirmationEmailProviderId: b.refund_confirmation_email_provider_id ?? null,
+    merchantOrderEmailSentAt: b.merchant_order_email_sent_at
+      ? new Date(b.merchant_order_email_sent_at).toISOString()
+      : null,
+    merchantOrderEmailProviderId: b.merchant_order_email_provider_id ?? null,
+    merchantRefundEmailSentAt: b.merchant_refund_email_sent_at
+      ? new Date(b.merchant_refund_email_sent_at).toISOString()
+      : null,
+    merchantRefundEmailProviderId: b.merchant_refund_email_provider_id ?? null,
   }));
 
   return NextResponse.json({ rows });

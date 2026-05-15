@@ -84,6 +84,10 @@ type AdminRow = {
   refundFailureReason: string | null;
   refundConfirmationEmailSentAt: string | null;
   refundConfirmationEmailProviderId: string | null;
+  merchantOrderEmailSentAt: string | null;
+  merchantOrderEmailProviderId: string | null;
+  merchantRefundEmailSentAt: string | null;
+  merchantRefundEmailProviderId: string | null;
 };
 type PricingRule = {
   id: string;
@@ -276,6 +280,10 @@ type Labels = {
   refundFailureReason: string;
   refundEmailSentAt: string;
   refundEmailProvider: string;
+  merchantOrderEmailSentAt: string;
+  merchantOrderEmailProvider: string;
+  merchantRefundEmailSentAt: string;
+  merchantRefundEmailProvider: string;
   refundNotRequired: string;
   refundPending: string;
   refundSucceeded: string;
@@ -1677,6 +1685,26 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                                   <div>
                                     <div className="text-xs text-slate-500">{labels.refundEmailProvider}</div>
                                     <div className="font-medium text-slate-900 break-all">{renderDetailValue(r.refundConfirmationEmailProviderId)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.merchantOrderEmailSentAt}</div>
+                                    <div className="font-medium text-slate-900">
+                                      {r.merchantOrderEmailSentAt ? formatDateTimeJST(r.merchantOrderEmailSentAt, locale) : labels.notProvided}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.merchantOrderEmailProvider}</div>
+                                    <div className="font-medium text-slate-900 break-all">{renderDetailValue(r.merchantOrderEmailProviderId)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.merchantRefundEmailSentAt}</div>
+                                    <div className="font-medium text-slate-900">
+                                      {r.merchantRefundEmailSentAt ? formatDateTimeJST(r.merchantRefundEmailSentAt, locale) : labels.notProvided}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.merchantRefundEmailProvider}</div>
+                                    <div className="font-medium text-slate-900 break-all">{renderDetailValue(r.merchantRefundEmailProviderId)}</div>
                                   </div>
                                 </div>
                               </div>

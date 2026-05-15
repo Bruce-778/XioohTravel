@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { syncBookingPaymentFromCheckoutSession, syncBookingRefundFromStripeRefund } from "@/lib/bookings";
 import { getPaymentConfirmationEmailDiagnostics } from "@/lib/email";
+import { sendMerchantRefundNotificationIfNeeded } from "@/lib/merchantNotification";
 import { sendPaymentConfirmationEmailIfNeeded } from "@/lib/paymentConfirmation";
 import { sendRefundConfirmationEmailIfNeeded } from "@/lib/refundConfirmation";
 import { getStripe } from "@/lib/stripe";
@@ -66,6 +67,17 @@ export async function POST(req: Request) {
         refundId: refund.id,
         refundStatus: refund.status,
       });
+
+      if (bookingId) {
+        await sendMerchantRefundNotificationIfNeeded(bookingId).catch((error) => {
+          console.error("[stripe_webhook] Failed to send merchant refund notification", {
+            eventId: event.id,
+            bookingId,
+            refundId: refund.id,
+            error,
+          });
+        });
+      }
 
       if (bookingId && refund.status === "succeeded") {
         const emailResult = await sendRefundConfirmationEmailIfNeeded(bookingId);

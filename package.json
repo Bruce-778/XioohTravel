@@ -11,6 +11,7 @@
     "init-db": "tsx scripts/init-db.ts",
     "inspect:payment-confirmation": "tsx scripts/inspect-payment-confirmation.ts",
     "patch:bookings-payment-columns": "tsx scripts/patch-bookings-payment-columns.ts",
+    "retry:merchant-order-email": "tsx scripts/retry-merchant-order-email.ts",
     "retry:payment-confirmation-email": "tsx scripts/retry-payment-confirmation-email.ts",
     "seed": "tsx scripts/seed.ts"
   },

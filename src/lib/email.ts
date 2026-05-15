@@ -11,6 +11,7 @@ type AuthVerificationEmailParams = {
 export type PaymentConfirmationBooking = {
   id: string;
   status: string;
+  is_urgent?: boolean;
   trip_type: string;
   pickup_time: Date | string;
   pickup_location: string;
@@ -94,6 +95,14 @@ function buildPaymentConfirmationIdempotencyKey(bookingId: string) {
 
 function buildRefundConfirmationIdempotencyKey(bookingId: string, refundId: string | null) {
   return `refund-confirmation-${bookingId}-${refundId ?? "unknown"}`;
+}
+
+function buildMerchantOrderNotificationIdempotencyKey(bookingId: string) {
+  return `merchant-order-notification-${bookingId}`;
+}
+
+function buildMerchantRefundNotificationIdempotencyKey(bookingId: string, refundId: string | null) {
+  return `merchant-refund-notification-${bookingId}-${refundId ?? "unknown"}`;
 }
 
 function buildAuthVerificationIdempotencyKey(email: string, code: string) {
@@ -224,6 +233,15 @@ function buildLuggageSummary(booking: PaymentConfirmationBooking) {
   ].join(" / ");
 }
 
+function buildAdminUrl() {
+  if (!process.env.APP_BASE_URL) {
+    throw new Error("APP_BASE_URL is not configured");
+  }
+
+  const baseUrl = process.env.APP_BASE_URL.replace(/\/+$/, "");
+  return `${baseUrl}/admin`;
+}
+
 function renderRow(label: string, value: string) {
   return `
     <tr>
@@ -235,7 +253,7 @@ function renderRow(label: string, value: string) {
 
 type ResendEmailPayload = {
   from: string;
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
   text: string;
@@ -246,7 +264,7 @@ async function sendResendEmailRequest(payload: ResendEmailPayload, idempotencyKe
   const apiKey = getResendApiKey();
   const requestBody = JSON.stringify({
     from: payload.from,
-    to: [payload.to],
+    to: Array.isArray(payload.to) ? payload.to : [payload.to],
     subject: payload.subject,
     html: payload.html,
     text: payload.text,
@@ -865,4 +883,276 @@ export async function sendBookingRefundConfirmationEmail(booking: RefundConfirma
   }
 
   throw new Error("Failed to send refund confirmation email");
+}
+
+export async function sendMerchantOrderNotificationEmail({
+  booking,
+  recipients,
+}: {
+  booking: PaymentConfirmationBooking;
+  recipients: string[];
+}) {
+  if (recipients.length === 0) {
+    return { providerId: null };
+  }
+
+  const diagnostics = getPaymentConfirmationEmailDiagnostics();
+  const from = getBookingEmailFrom();
+  const idempotencyKey = buildMerchantOrderNotificationIdempotencyKey(booking.id);
+  const adminUrl = buildAdminUrl();
+  const tripType = getTripTypeLabel(booking.trip_type);
+  const vehicle = getVehicleLabel(booking.vehicle_name);
+  const pickupTime = formatDateTimeJST(booking.pickup_time, "en-US");
+  const pickupLocation = getLocalizedLocation(booking.pickup_location, "en");
+  const dropoffLocation = getLocalizedLocation(booking.dropoff_location, "en");
+  const luggage = buildLuggageSummary(booking);
+  const totalPaid = formatCurrencyJpy(Number(booking.pricing_total_jpy ?? 0));
+  const urgency = booking.is_urgent ? "Urgent order within 24h" : "Non-urgent order";
+  const subject = `[Merchant] New paid booking ${booking.id} - ${pickupLocation} to ${dropoffLocation}`;
+  const replyTo = getBookingEmailReplyTo();
+
+  console.info("[email] Sending merchant order notification", {
+    bookingId: booking.id,
+    recipientCount: recipients.length,
+    idempotencyKey,
+    diagnostics,
+  });
+
+  const details = [
+    renderRow("Booking ID", booking.id),
+    renderRow("Order type", urgency),
+    renderRow("Status", booking.status),
+    renderRow("Trip type", tripType),
+    renderRow("Vehicle", vehicle),
+    renderRow("Pickup time (JST)", pickupTime),
+    renderRow("Pickup", pickupLocation),
+    renderRow("Drop-off", dropoffLocation),
+    renderRow("Flight number", booking.flight_number ?? "-"),
+    renderRow("Flight note", booking.flight_note ?? "-"),
+    renderRow("Passengers", String(booking.passengers)),
+    renderRow("Child seats", String(booking.child_seats)),
+    renderRow("Meet-and-greet sign", booking.meet_and_greet_sign ? "Yes" : "No"),
+    renderRow("Luggage", luggage),
+    renderRow("Contact name", booking.contact_name),
+    renderRow("Contact phone", booking.contact_phone),
+    renderRow("Contact email", booking.contact_email),
+    renderRow("Special request", booking.contact_note ?? "-"),
+    renderRow("Total paid", totalPaid),
+    renderRow("Stripe payment", booking.stripe_payment_intent_id ?? "-"),
+  ];
+
+  const html = `
+    <!doctype html>
+    <html>
+      <body style="margin:0;background:#f8fafc;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+        <div style="max-width:720px;margin:0 auto;padding:32px 16px;">
+          <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;overflow:hidden;">
+            <div style="padding:32px;background:linear-gradient(135deg,#111827 0%,#0ea5e9 100%);color:#ffffff;">
+              <div style="font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.8;">XioohTravel merchant notice</div>
+              <h1 style="margin:12px 0 8px;font-size:28px;line-height:1.2;">New paid booking</h1>
+              <p style="margin:0;font-size:15px;line-height:1.7;opacity:0.92;">
+                A customer has completed payment. Please arrange the vehicle and driver according to the details below.
+              </p>
+            </div>
+
+            <div style="padding:28px 32px;">
+              <table style="width:100%;border-collapse:collapse;">
+                ${details.join("")}
+              </table>
+
+              <div style="margin-top:28px;padding:20px;border-radius:18px;background:#eff6ff;border:1px solid #bfdbfe;">
+                <div style="font-size:16px;font-weight:700;color:#1d4ed8;margin-bottom:8px;">Admin dashboard</div>
+                <div style="font-size:14px;line-height:1.7;color:#1e3a8a;margin-bottom:14px;">
+                  Open the admin dashboard to review this booking and manage operational status.
+                </div>
+                <a
+                  href="${escapeHtml(adminUrl)}"
+                  style="display:inline-block;padding:12px 18px;border-radius:999px;background:#2563eb;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;"
+                >
+                  Open admin
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = [
+    "XioohTravel merchant notice",
+    "",
+    "New paid booking",
+    `Booking ID: ${booking.id}`,
+    `Order type: ${urgency}`,
+    `Status: ${booking.status}`,
+    `Trip type: ${tripType}`,
+    `Vehicle: ${vehicle}`,
+    `Pickup time (JST): ${pickupTime}`,
+    `Pickup: ${pickupLocation}`,
+    `Drop-off: ${dropoffLocation}`,
+    `Flight number: ${booking.flight_number ?? "-"}`,
+    `Flight note: ${booking.flight_note ?? "-"}`,
+    `Passengers: ${booking.passengers}`,
+    `Child seats: ${booking.child_seats}`,
+    `Meet-and-greet sign: ${booking.meet_and_greet_sign ? "Yes" : "No"}`,
+    `Luggage: ${luggage}`,
+    `Contact name: ${booking.contact_name}`,
+    `Contact phone: ${booking.contact_phone}`,
+    `Contact email: ${booking.contact_email}`,
+    `Special request: ${booking.contact_note ?? "-"}`,
+    `Total paid: ${totalPaid}`,
+    `Stripe payment: ${booking.stripe_payment_intent_id ?? "-"}`,
+    "",
+    `Admin dashboard: ${adminUrl}`,
+  ].join("\n");
+
+  const response = await sendResendEmailRequest(
+    {
+      from,
+      to: recipients,
+      subject,
+      html,
+      text,
+      ...(replyTo ? { replyTo } : {}),
+    },
+    idempotencyKey
+  );
+
+  if (response.error) {
+    throw new Error(response.error.message || "Failed to send merchant order notification");
+  }
+
+  return {
+    providerId: response.data?.id ?? null,
+  };
+}
+
+export async function sendMerchantRefundNotificationEmail({
+  booking,
+  recipients,
+}: {
+  booking: RefundConfirmationBooking & {
+    cancel_reason: string | null;
+    cancelled_at: Date | string | null;
+  };
+  recipients: string[];
+}) {
+  if (recipients.length === 0) {
+    return { providerId: null };
+  }
+
+  const diagnostics = getPaymentConfirmationEmailDiagnostics();
+  const from = getBookingEmailFrom();
+  const idempotencyKey = buildMerchantRefundNotificationIdempotencyKey(booking.id, booking.stripe_refund_id);
+  const adminUrl = buildAdminUrl();
+  const pickupTime = formatDateTimeJST(booking.pickup_time, "en-US");
+  const pickupLocation = getLocalizedLocation(booking.pickup_location, "en");
+  const dropoffLocation = getLocalizedLocation(booking.dropoff_location, "en");
+  const refundAmount = formatCurrencyJpy(Number(booking.refund_amount_jpy ?? booking.pricing_total_jpy ?? 0));
+  const cancelledAt = booking.cancelled_at ? formatDateTimeJST(booking.cancelled_at, "en-US") : "Cancelled";
+  const subject = `[Merchant] Booking cancelled ${booking.id} - refund ${booking.stripe_refund_status ?? "requested"}`;
+  const replyTo = getBookingEmailReplyTo();
+
+  console.info("[email] Sending merchant refund notification", {
+    bookingId: booking.id,
+    recipientCount: recipients.length,
+    idempotencyKey,
+    diagnostics,
+  });
+
+  const details = [
+    renderRow("Booking ID", booking.id),
+    renderRow("Status", booking.status),
+    renderRow("Cancelled at", cancelledAt),
+    renderRow("Cancellation reason", booking.cancel_reason ?? "-"),
+    renderRow("Refund status", booking.stripe_refund_status ?? "-"),
+    renderRow("Refund amount", refundAmount),
+    renderRow("Stripe refund", booking.stripe_refund_id ?? "-"),
+    renderRow("Pickup time (JST)", pickupTime),
+    renderRow("Pickup", pickupLocation),
+    renderRow("Drop-off", dropoffLocation),
+    renderRow("Contact name", booking.contact_name),
+    renderRow("Contact phone", booking.contact_phone),
+    renderRow("Contact email", booking.contact_email),
+  ];
+
+  const html = `
+    <!doctype html>
+    <html>
+      <body style="margin:0;background:#f8fafc;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+        <div style="max-width:720px;margin:0 auto;padding:32px 16px;">
+          <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;overflow:hidden;">
+            <div style="padding:32px;background:linear-gradient(135deg,#111827 0%,#dc2626 100%);color:#ffffff;">
+              <div style="font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.8;">XioohTravel merchant notice</div>
+              <h1 style="margin:12px 0 8px;font-size:28px;line-height:1.2;">Booking cancelled</h1>
+              <p style="margin:0;font-size:15px;line-height:1.7;opacity:0.92;">
+                A paid booking was cancelled and a Stripe refund request was created. Please stop or adjust vehicle arrangements.
+              </p>
+            </div>
+
+            <div style="padding:28px 32px;">
+              <table style="width:100%;border-collapse:collapse;">
+                ${details.join("")}
+              </table>
+
+              <div style="margin-top:28px;padding:20px;border-radius:18px;background:#fef2f2;border:1px solid #fecaca;">
+                <div style="font-size:16px;font-weight:700;color:#b91c1c;margin-bottom:8px;">Action needed</div>
+                <div style="font-size:14px;line-height:1.7;color:#7f1d1d;margin-bottom:14px;">
+                  Please review driver and vehicle arrangements for this booking.
+                </div>
+                <a
+                  href="${escapeHtml(adminUrl)}"
+                  style="display:inline-block;padding:12px 18px;border-radius:999px;background:#dc2626;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;"
+                >
+                  Open admin
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = [
+    "XioohTravel merchant notice",
+    "",
+    "Booking cancelled",
+    `Booking ID: ${booking.id}`,
+    `Status: ${booking.status}`,
+    `Cancelled at: ${cancelledAt}`,
+    `Cancellation reason: ${booking.cancel_reason ?? "-"}`,
+    `Refund status: ${booking.stripe_refund_status ?? "-"}`,
+    `Refund amount: ${refundAmount}`,
+    `Stripe refund: ${booking.stripe_refund_id ?? "-"}`,
+    `Pickup time (JST): ${pickupTime}`,
+    `Pickup: ${pickupLocation}`,
+    `Drop-off: ${dropoffLocation}`,
+    `Contact name: ${booking.contact_name}`,
+    `Contact phone: ${booking.contact_phone}`,
+    `Contact email: ${booking.contact_email}`,
+    "",
+    `Admin dashboard: ${adminUrl}`,
+  ].join("\n");
+
+  const response = await sendResendEmailRequest(
+    {
+      from,
+      to: recipients,
+      subject,
+      html,
+      text,
+      ...(replyTo ? { replyTo } : {}),
+    },
+    idempotencyKey
+  );
+
+  if (response.error) {
+    throw new Error(response.error.message || "Failed to send merchant refund notification");
+  }
+
+  return {
+    providerId: response.data?.id ?? null,
+  };
 }

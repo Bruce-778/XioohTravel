@@ -65,7 +65,11 @@ async function main() {
            'refunded_at',
            'refund_failure_reason',
            'refund_confirmation_email_sent_at',
-           'refund_confirmation_email_provider_id'
+           'refund_confirmation_email_provider_id',
+           'merchant_order_email_sent_at',
+           'merchant_order_email_provider_id',
+           'merchant_refund_email_sent_at',
+           'merchant_refund_email_provider_id'
          )
        ORDER BY column_name`
     );

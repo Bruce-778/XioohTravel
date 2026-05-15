@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { CancelBookingSchema } from "@/lib/validators";
 import { canUserCancel } from "@/lib/bookingRules";
 import { getT } from "@/lib/i18n";
+import { sendMerchantRefundNotificationIfNeeded } from "@/lib/merchantNotification";
 import { sendRefundConfirmationEmailIfNeeded } from "@/lib/refundConfirmation";
 import { createBookingRefund, retrieveCheckoutSessionWithPaymentIntent } from "@/lib/stripe";
 
@@ -155,6 +156,14 @@ export async function POST(req: Request) {
     );
 
     await client.query("COMMIT");
+
+    await sendMerchantRefundNotificationIfNeeded(bookingId).catch((error) => {
+      console.error("[cancel_booking] Failed to send merchant refund notification", {
+        bookingId,
+        refundId: refund.id,
+        error,
+      });
+    });
 
     if (refundStatus === "succeeded") {
       await sendRefundConfirmationEmailIfNeeded(bookingId).catch((error) => {
