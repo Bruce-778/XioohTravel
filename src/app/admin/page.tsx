@@ -57,6 +57,8 @@ export default async function AdminPage() {
             thisMonth: t("admin.thisMonth"),
             all: t("admin.all"),
             filter: t("admin.filter"),
+            orderIdSearch: t("admin.orderIdSearch"),
+            orderIdPlaceholder: t("admin.orderIdPlaceholder"),
             statuses: {
               PENDING_PAYMENT: t("status.PENDING_PAYMENT"),
               PAID: t("status.PAID"),

@@ -206,6 +206,8 @@ type Labels = {
   thisMonth: string;
   all: string;
   filter: string;
+  orderIdSearch: string;
+  orderIdPlaceholder: string;
   statuses: Record<string, string>;
   vehicles: Record<string, string>;
   pricing: string;
@@ -401,6 +403,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   const [startTime, setStartTime] = useState<string>("00:00");
   const [endDate, setEndDate] = useState<string>("");
   const [endTime, setEndTime] = useState<string>("23:59");
+  const [orderIdSearch, setOrderIdSearch] = useState<string>("");
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -756,11 +759,14 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
       if (filterStatus !== "ALL") params.append("status", filterStatus);
+      const normalizedOrderId = orderIdSearch.trim();
+      if (normalizedOrderId) params.append("orderId", normalizedOrderId);
 
       const res = await fetch(`/api/admin/orders?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? labels.loadFailed);
       setRows(data.rows ?? []);
+      setOrderCurrentPage(1);
     } catch (e: any) {
       setError(e?.message ?? labels.loadFailed);
     } finally {
@@ -802,6 +808,8 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
       if (filterStatus !== "ALL") params.append("status", filterStatus);
+      const normalizedOrderId = orderIdSearch.trim();
+      if (normalizedOrderId) params.append("orderId", normalizedOrderId);
 
       const res = await fetch(`/api/admin/orders/export?${params.toString()}`);
       if (!res.ok) {
@@ -1328,6 +1336,23 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
               />
             </div>
           </div>
+
+          {/* Order ID Search */}
+          <div className="w-[190px] flex-shrink-0">
+            <div className="text-xs text-slate-500 mb-1.5">{labels.orderIdSearch}</div>
+            <input
+              type="search"
+              className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+              value={orderIdSearch}
+              onChange={(e) => setOrderIdSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  load();
+                }
+              }}
+              placeholder={labels.orderIdPlaceholder}
+            />
+          </div>
           
           {/* Status - Fixed narrow width */}
           <div className="w-[120px] flex-shrink-0">
@@ -1349,7 +1374,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
             <button
               onClick={load}
               disabled={loading || !token}
-              className="px-4 py-2 rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-60 text-sm font-medium transition-colors whitespace-nowrap"
+              className="px-4 py-2 rounded-lg bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100 disabled:opacity-60 text-sm font-medium transition-colors whitespace-nowrap"
             >
               {labels.filter}
             </button>
@@ -1420,7 +1445,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                                 {r.isUrgent && (
                                   <>
                                     <div className="h-6 w-px bg-slate-200"></div>
-                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-md animate-pulse">
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-gradient-to-r from-rose-500 to-rose-600 text-white shadow-md">
                                       ⚡ {labels.urgentTag}
                                     </span>
                                   </>
@@ -1485,13 +1510,13 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                             
                             <div className="flex items-center gap-2">
                               <button
-                                className="px-4 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 active:bg-slate-100 transition-colors text-sm font-semibold whitespace-nowrap"
+                                className="px-4 py-2.5 rounded-lg bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100 disabled:opacity-60 transition-colors text-sm font-semibold whitespace-nowrap"
                                 onClick={() => setExpandedBookingId(isExpanded ? null : r.id)}
                               >
                                 {isExpanded ? labels.hideDetails : labels.details}
                               </button>
                               <button
-                                className="px-5 py-2.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-700 transition-colors text-sm font-semibold whitespace-nowrap shadow-md hover:shadow-lg"
+                                className="px-5 py-2.5 rounded-lg bg-brand-50 text-brand-700 border border-brand-200 hover:bg-brand-100 disabled:opacity-60 transition-colors text-sm font-semibold whitespace-nowrap"
                                 onClick={() => setEditingId(r.id)}
                               >
                                 {labels.edit}

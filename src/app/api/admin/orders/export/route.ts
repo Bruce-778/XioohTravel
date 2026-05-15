@@ -12,6 +12,7 @@ export async function GET(req: Request) {
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
   const status = searchParams.get("status");
+  const orderId = searchParams.get("orderId")?.trim() || "";
   const dateColumn = dateType === "pickupTime" ? "pickup_time" : "created_at";
 
   let query = `
@@ -35,6 +36,11 @@ export async function GET(req: Request) {
   if (status && status !== "ALL") {
     query += ` AND b.status = $${paramIndex++}`;
     params.push(status);
+  }
+
+  if (orderId) {
+    query += ` AND b.id ILIKE $${paramIndex++}`;
+    params.push(`%${orderId}%`);
   }
 
   query += ` ORDER BY b.is_urgent DESC, b.${dateColumn} DESC, b.created_at DESC`;
