@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { LocalizedDatePicker } from "@/components/LocalizedDatePicker";
 import {
   normalizePricingRouteValue,
   type PricingImportPreviewRow,
@@ -187,6 +188,8 @@ type Labels = {
   adjustmentHint: string;
   notePlaceholder: string;
   loginPlaceholder: string;
+  showSecret: string;
+  hideSecret: string;
   urgentTag: string;
   close: string;
   details: string;
@@ -387,6 +390,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   const [pricingSaving, setPricingSaving] = useState(false);
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
+  const [showAdminSecret, setShowAdminSecret] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<AdminRow[]>([]);
   const [currency, setCurrency] = useState<Currency>("JPY");
@@ -448,6 +452,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   const [ruleFormInitialSnapshot, setRuleFormInitialSnapshot] = useState("");
   const pricingFileInputRef = useRef<HTMLInputElement | null>(null);
   const isZh = locale.startsWith("zh");
+  const dateTimeLocale = isZh ? "zh-CN" : "en-GB";
 
   function getBlankRuleForm(): PricingRuleFormState {
     return {
@@ -1205,12 +1210,30 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
           
           <div className="relative mb-6">
             <input
-                type="password"
+                type={showAdminSecret ? "text" : "password"}
               value={token === "verified" ? "" : token}
                 onChange={(e) => setToken(e.target.value)}
                 placeholder={labels.loginPlaceholder}
-                className="w-full px-6 py-4 rounded-2xl border-2 border-slate-200 focus:border-brand-500 outline-none transition-all text-lg font-mono tracking-widest text-center"
+                className="w-full rounded-2xl border-2 border-slate-200 px-6 py-4 pr-16 text-center font-mono text-lg tracking-widest outline-none transition-all focus:border-brand-500"
               />
+              <button
+                type="button"
+                aria-label={showAdminSecret ? labels.hideSecret : labels.showSecret}
+                title={showAdminSecret ? labels.hideSecret : labels.showSecret}
+                onClick={() => setShowAdminSecret((value) => !value)}
+                className="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl text-slate-400 transition hover:bg-brand-50 hover:text-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-200"
+              >
+                {showAdminSecret ? (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58M9.88 4.24A10.49 10.49 0 0112 4c5.52 0 9.39 4.26 10.5 8a11.73 11.73 0 01-2.17 3.68M6.11 6.11C3.82 7.53 2.28 9.72 1.5 12c1.11 3.74 4.98 8 10.5 8a10.4 10.4 0 005.01-1.26" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.25 12s3.75-7 9.75-7 9.75 7 9.75 7-3.75 7-9.75 7-9.75-7-9.75-7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+                  </svg>
+                )}
+              </button>
           </div>
           <button
             onClick={handleLogin}
@@ -1297,20 +1320,21 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
           {/* Start Date & Time - Compact Layout */}
           <div className="flex-1 min-w-[240px]">
             <div className="text-xs text-slate-500 mb-1.5">{labels.startDate}</div>
-            <div className="flex gap-2">
-              <input
-                type="date"
-                className="flex-[1.5] min-w-[140px] px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+            <div className="flex min-w-0 gap-2">
+              <LocalizedDatePicker
+                className="flex-[1.5] min-w-[140px]"
+                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
+                onChange={setStartDate}
+                locale={locale}
+                ariaLabel={labels.startDate}
               />
               <input
                 type="time"
-                className="flex-1 min-w-[100px] pl-3 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                className="flex-1 min-w-[100px] appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
-                lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
+                lang={dateTimeLocale}
               />
             </div>
           </div>
@@ -1318,21 +1342,22 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
           {/* End Date & Time - Compact Layout */}
           <div className="flex-1 min-w-[240px]">
             <div className="text-xs text-slate-500 mb-1.5">{labels.endDate}</div>
-            <div className="flex gap-2">
-              <input
-                type="date"
-                className="flex-[1.5] min-w-[140px] px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+            <div className="flex min-w-0 gap-2">
+              <LocalizedDatePicker
+                className="flex-[1.5] min-w-[140px]"
+                buttonClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                min={startDate}
-                lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
+                onChange={setEndDate}
+                locale={locale}
+                ariaLabel={labels.endDate}
+                minDate={startDate}
               />
               <input
                 type="time"
-                className="flex-1 min-w-[100px] pl-3 pr-8 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all"
+                className="flex-1 min-w-[100px] appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
-                lang={locale.startsWith("zh") ? "zh-CN" : "en-US"}
+                lang={dateTimeLocale}
               />
             </div>
           </div>

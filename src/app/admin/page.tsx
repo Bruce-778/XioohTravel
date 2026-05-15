@@ -38,6 +38,8 @@ export default async function AdminPage() {
             adjustmentHint: t("admin.adjustmentHint"),
             notePlaceholder: t("admin.notePlaceholder"),
             loginPlaceholder: t("admin.loginPlaceholder"),
+            showSecret: t("admin.showSecret"),
+            hideSecret: t("admin.hideSecret"),
             urgentTag: t("admin.urgentTag"),
             close: t("admin.close"),
             details: t("admin.details"),
