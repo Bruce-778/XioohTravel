@@ -83,6 +83,7 @@ export async function Footer() {
   ];
   const navigateLinks: FooterLink[] = [
     { href: "/fleet", label: t("footer.vehicleGuide") },
+    { href: "/luggage-guide", label: t("footer.luggageGuide") },
     { href: "/drivers", label: t("footer.driverGuide") },
     { href: "/#faq", label: t("footer.faq") },
   ];

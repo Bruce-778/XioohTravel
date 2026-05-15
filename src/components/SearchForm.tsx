@@ -494,6 +494,8 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
     DROPOFF: labels?.dropoff ?? "Drop-off",
     POINT_TO_POINT: labels?.p2p ?? "Point-to-point"
   };
+  const childSeatsFullLabel = labels?.childSeats ?? "Child Seats";
+  const childSeatsDisplayLabel = childSeatsFullLabel.replace(/\s*\(.+\)$/, "");
 
   return (
     <form
@@ -597,8 +599,11 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
           />
         </label>
         <label className="block">
-          <div className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">
-            {labels?.childSeats ?? "Child Seats"}
+          <div
+            className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis"
+            title={childSeatsFullLabel}
+          >
+            {childSeatsDisplayLabel}
           </div>
           <input
             type="number"
@@ -607,10 +612,11 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
             className="input-field"
             value={childSeats}
             onChange={(e) => setChildSeats(Number(e.target.value))}
+            aria-label={childSeatsFullLabel}
           />
         </label>
         <label className="block">
-          <div className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">{labels?.luggageSmall ?? "Small Luggage"}</div>
+          <div className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">{labels?.luggageSmall ?? "Small luggages"}</div>
           <input
             type="number"
             min={0}
@@ -621,7 +627,7 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
           />
         </label>
         <label className="block">
-          <div className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">{labels?.luggageMedium ?? "Medium Luggage"}</div>
+          <div className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">{labels?.luggageMedium ?? "Medium luggages"}</div>
           <input
             type="number"
             min={0}
@@ -632,7 +638,7 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
           />
         </label>
         <label className="block">
-          <div className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">{labels?.luggageLarge ?? "Large Luggage"}</div>
+          <div className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">{labels?.luggageLarge ?? "Large luggages"}</div>
           <input
             type="number"
             min={0}

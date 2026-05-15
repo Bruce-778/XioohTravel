@@ -8,6 +8,7 @@ import { formatMoneyFromJpy, getCurrency } from "@/lib/currency";
 import { getT, getLocale } from "@/lib/i18n";
 import { getPricingAreaCode, getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
 import { getVehicleImageByKey } from "@/lib/vehicleImages";
+import { LuggageCapacityDisplay, type LuggageDisplayLabels } from "@/components/LuggageCapacityDisplay";
 
 export default async function VehiclesPage({
   searchParams
@@ -18,6 +19,14 @@ export default async function VehiclesPage({
   const { t } = await getT();
   const locale = await getLocale();
   const currency = await getCurrency();
+  const luggageLabels: LuggageDisplayLabels = {
+    carryOn: t("luggage.carryOn"),
+    mediumSuitcase: t("luggage.mediumSuitcase"),
+    largeSuitcase: t("luggage.largeSuitcase"),
+    carryOnSize: t("luggage.carryOnSize"),
+    mediumSize: t("luggage.mediumSize"),
+    largeSize: t("luggage.largeSize"),
+  };
   const parsed = SearchSchema.safeParse({
     tripType: params.tripType,
     fromArea: params.fromArea,
@@ -93,9 +102,19 @@ export default async function VehiclesPage({
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight">{t("vehicles.title")}</h2>
-          <div className="text-sm text-slate-600 mt-1">
-            {getLocalizedLocation(q.fromArea, locale)} → {getLocalizedLocation(q.toArea, locale)} · {formatDateTimeJST(pickupTime, locale)} · {q.passengers} {t("common.passengers")} · {t("common.luggage")}{" "}
-            {q.luggageSmall}/{q.luggageMedium}/{q.luggageLarge}
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-slate-600">
+            <span>
+              {getLocalizedLocation(q.fromArea, locale)} → {getLocalizedLocation(q.toArea, locale)} · {formatDateTimeJST(pickupTime, locale)} · {q.passengers} {t("common.passengers")}
+            </span>
+            <span className="font-medium text-slate-700">{t("luggage.requested")}</span>
+            <LuggageCapacityDisplay
+              small={q.luggageSmall}
+              medium={q.luggageMedium}
+              large={q.luggageLarge}
+              labels={luggageLabels}
+              showSizes
+              className="gap-1.5"
+            />
           </div>
         </div>
         <div className="flex flex-col items-start gap-2 text-sm md:items-end">
@@ -202,12 +221,12 @@ export default async function VehiclesPage({
                     </svg>
                     <span>{v.seats} {t("common.seats")}</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
-                    <span>{v.luggage_small}/{v.luggage_medium}/{v.luggage_large} {t("common.luggage")}</span>
-                  </div>
+                  <LuggageCapacityDisplay
+                    small={v.luggage_small}
+                    medium={v.luggage_medium}
+                    large={v.luggage_large}
+                    labels={luggageLabels}
+                  />
                 </div>
 
                 <div className="mt-3 text-sm text-slate-500 leading-relaxed max-w-xl">

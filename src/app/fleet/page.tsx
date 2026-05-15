@@ -1,6 +1,10 @@
 import Image from "next/image";
 import { getT } from "@/lib/i18n";
 import { getVehicleImageByKey, type VehicleImageKey } from "@/lib/vehicleImages";
+import {
+  LuggageCapacityDisplay,
+  type LuggageDisplayLabels,
+} from "@/components/LuggageCapacityDisplay";
 
 const VEHICLES = [
   {
@@ -42,6 +46,14 @@ const VEHICLES = [
 
 export default async function FleetPage() {
   const { t } = await getT();
+  const luggageLabels: LuggageDisplayLabels = {
+    carryOn: t("luggage.carryOn"),
+    mediumSuitcase: t("luggage.mediumSuitcase"),
+    largeSuitcase: t("luggage.largeSuitcase"),
+    carryOnSize: t("luggage.carryOnSize"),
+    mediumSize: t("luggage.mediumSize"),
+    largeSize: t("luggage.largeSize"),
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 py-14 sm:py-20">
@@ -86,20 +98,14 @@ export default async function FleetPage() {
                     <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">
                       {t("fleet.luggage")}
                     </div>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-xl bg-white p-3">
-                        <div className="text-lg font-black text-slate-950">{vehicle.luggage[0]}</div>
-                        <div className="mt-1 text-xs font-semibold text-slate-500">{t("fleet.small")}</div>
-                      </div>
-                      <div className="rounded-xl bg-white p-3">
-                        <div className="text-lg font-black text-slate-950">{vehicle.luggage[1]}</div>
-                        <div className="mt-1 text-xs font-semibold text-slate-500">{t("fleet.medium")}</div>
-                      </div>
-                      <div className="rounded-xl bg-white p-3">
-                        <div className="text-lg font-black text-slate-950">{vehicle.luggage[2]}</div>
-                        <div className="mt-1 text-xs font-semibold text-slate-500">{t("fleet.large")}</div>
-                      </div>
-                    </div>
+                    <LuggageCapacityDisplay
+                      small={vehicle.luggage[0]}
+                      medium={vehicle.luggage[1]}
+                      large={vehicle.luggage[2]}
+                      labels={luggageLabels}
+                      variant="stacked"
+                      className="mt-3"
+                    />
                   </div>
                 </div>
               </article>
