@@ -53,6 +53,7 @@ type BookingRow = {
   refundRequestedAt: string | null;
   refundedAt: string | null;
   refundFailureReason: string | null;
+  refundConfirmationEmailSentAt: string | null;
   totalJpy: number;
   vehicleName: string;
 };
@@ -135,6 +136,7 @@ type Labels = {
   refundedAt: string;
   refundReference: string;
   refundFailureReason: string;
+  refundEmailSentAt: string;
   refundNotRequired: string;
   refundPending: string;
   refundSucceeded: string;
@@ -682,6 +684,14 @@ export function OrdersClient({
                                     <dd className="font-medium text-rose-700 text-right">{row.refundFailureReason}</dd>
                                   </div>
                                 ) : null}
+                                <div className="flex justify-between gap-4">
+                                  <dt className="text-slate-500">{labels.refundEmailSentAt}</dt>
+                                  <dd className="font-medium text-slate-900 text-right">
+                                    {row.refundConfirmationEmailSentAt
+                                      ? formatDateTimeJST(row.refundConfirmationEmailSentAt, locale)
+                                      : labels.notProvided}
+                                  </dd>
+                                </div>
                               </dl>
                             </div>
                           </div>

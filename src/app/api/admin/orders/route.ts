@@ -80,6 +80,10 @@ export async function GET(req: Request) {
     refundRequestedAt: b.refund_requested_at ? new Date(b.refund_requested_at).toISOString() : null,
     refundedAt: b.refunded_at ? new Date(b.refunded_at).toISOString() : null,
     refundFailureReason: b.refund_failure_reason ?? null,
+    refundConfirmationEmailSentAt: b.refund_confirmation_email_sent_at
+      ? new Date(b.refund_confirmation_email_sent_at).toISOString()
+      : null,
+    refundConfirmationEmailProviderId: b.refund_confirmation_email_provider_id ?? null,
   }));
 
   return NextResponse.json({ rows });

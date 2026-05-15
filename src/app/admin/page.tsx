@@ -143,6 +143,8 @@ export default async function AdminPage() {
             refundedAt: t("admin.refundedAt"),
             refundReference: t("admin.refundReference"),
             refundFailureReason: t("admin.refundFailureReason"),
+            refundEmailSentAt: t("admin.refundEmailSentAt"),
+            refundEmailProvider: t("admin.refundEmailProvider"),
             refundNotRequired: t("orders.refundNotRequired"),
             refundPending: t("orders.refundPending"),
             refundSucceeded: t("orders.refundSucceeded"),

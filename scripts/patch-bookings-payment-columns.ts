@@ -63,7 +63,9 @@ async function main() {
            'refund_amount_jpy',
            'refund_requested_at',
            'refunded_at',
-           'refund_failure_reason'
+           'refund_failure_reason',
+           'refund_confirmation_email_sent_at',
+           'refund_confirmation_email_provider_id'
          )
        ORDER BY column_name`
     );

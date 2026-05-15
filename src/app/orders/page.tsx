@@ -116,6 +116,7 @@ export default async function OrdersPage({
             refundedAt: t("orders.refundedAt"),
             refundReference: t("orders.refundReference"),
             refundFailureReason: t("orders.refundFailureReason"),
+            refundEmailSentAt: t("orders.refundEmailSentAt"),
             refundNotRequired: t("orders.refundNotRequired"),
             refundPending: t("orders.refundPending"),
             refundSucceeded: t("orders.refundSucceeded"),

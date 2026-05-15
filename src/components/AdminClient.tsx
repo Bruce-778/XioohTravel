@@ -82,6 +82,8 @@ type AdminRow = {
   refundRequestedAt: string | null;
   refundedAt: string | null;
   refundFailureReason: string | null;
+  refundConfirmationEmailSentAt: string | null;
+  refundConfirmationEmailProviderId: string | null;
 };
 type PricingRule = {
   id: string;
@@ -272,6 +274,8 @@ type Labels = {
   refundedAt: string;
   refundReference: string;
   refundFailureReason: string;
+  refundEmailSentAt: string;
+  refundEmailProvider: string;
   refundNotRequired: string;
   refundPending: string;
   refundSucceeded: string;
@@ -1663,6 +1667,16 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                                   <div>
                                     <div className="text-xs text-slate-500">{labels.refundFailureReason}</div>
                                     <div className="font-medium text-rose-700 break-words">{renderDetailValue(r.refundFailureReason)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.refundEmailSentAt}</div>
+                                    <div className="font-medium text-slate-900">
+                                      {r.refundConfirmationEmailSentAt ? formatDateTimeJST(r.refundConfirmationEmailSentAt, locale) : labels.notProvided}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.refundEmailProvider}</div>
+                                    <div className="font-medium text-slate-900 break-all">{renderDetailValue(r.refundConfirmationEmailProviderId)}</div>
                                   </div>
                                 </div>
                               </div>

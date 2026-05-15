@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { syncBookingPaymentFromCheckoutSession, syncBookingRefundFromStripeRefund } from "@/lib/bookings";
 import { getPaymentConfirmationEmailDiagnostics } from "@/lib/email";
 import { sendPaymentConfirmationEmailIfNeeded } from "@/lib/paymentConfirmation";
+import { sendRefundConfirmationEmailIfNeeded } from "@/lib/refundConfirmation";
 import { getStripe } from "@/lib/stripe";
 
 export const runtime = "nodejs";
@@ -65,6 +66,16 @@ export async function POST(req: Request) {
         refundId: refund.id,
         refundStatus: refund.status,
       });
+
+      if (bookingId && refund.status === "succeeded") {
+        const emailResult = await sendRefundConfirmationEmailIfNeeded(bookingId);
+
+        console.info("[stripe_webhook] Refund confirmation email result", {
+          eventId: event.id,
+          bookingId,
+          emailResult,
+        });
+      }
     }
 
     return NextResponse.json({ received: true });

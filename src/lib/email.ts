@@ -34,6 +34,14 @@ export type PaymentConfirmationBooking = {
   vehicle_name: string | null;
 };
 
+export type RefundConfirmationBooking = PaymentConfirmationBooking & {
+  stripe_refund_id: string | null;
+  stripe_refund_status: string | null;
+  refund_amount_jpy: number | null;
+  refund_requested_at: Date | string | null;
+  refunded_at: Date | string | null;
+};
+
 const PAYMENT_CONFIRMATION_EMAIL_MAX_ATTEMPTS = 3;
 const PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS = [1000, 3000];
 
@@ -82,6 +90,10 @@ export function normalizeEmailAddress(email: string) {
 
 function buildPaymentConfirmationIdempotencyKey(bookingId: string) {
   return `payment-confirmation-${bookingId}`;
+}
+
+function buildRefundConfirmationIdempotencyKey(bookingId: string, refundId: string | null) {
+  return `refund-confirmation-${bookingId}-${refundId ?? "unknown"}`;
 }
 
 function buildAuthVerificationIdempotencyKey(email: string, code: string) {
@@ -679,4 +691,178 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
   }
 
   throw new Error("Failed to send payment confirmation email");
+}
+
+export async function sendBookingRefundConfirmationEmail(booking: RefundConfirmationBooking) {
+  const diagnostics = getPaymentConfirmationEmailDiagnostics();
+  const from = getBookingEmailFrom();
+  const usingTestSender = isResendDevSender(from);
+  const testRecipient = usingTestSender ? getBookingEmailTestTo() : null;
+
+  if (usingTestSender && !testRecipient) {
+    throw new Error("BOOKING_EMAIL_TEST_TO is required when using onboarding@resend.dev");
+  }
+
+  const recipientEmail = testRecipient ?? booking.contact_email;
+  const idempotencyKey = buildRefundConfirmationIdempotencyKey(booking.id, booking.stripe_refund_id);
+  console.info("[email] Sending booking refund confirmation", {
+    bookingId: booking.id,
+    from,
+    usingTestSender,
+    recipientEmail: maskEmailForLog(recipientEmail),
+    originalCustomerEmail: maskEmailForLog(booking.contact_email),
+    idempotencyKey,
+    diagnostics,
+  });
+
+  const ordersUrl = getOrdersUrl(booking.contact_email);
+  const refundAmount = formatCurrencyJpy(Number(booking.refund_amount_jpy ?? booking.pricing_total_jpy ?? 0));
+  const pickupTime = formatDateTimeJST(booking.pickup_time, "en-US");
+  const pickupLocation = getLocalizedLocation(booking.pickup_location, "en");
+  const dropoffLocation = getLocalizedLocation(booking.dropoff_location, "en");
+  const refundedAt = booking.refunded_at ? formatDateTimeJST(booking.refunded_at, "en-US") : "Refund processed";
+  const subjectPrefix = usingTestSender ? "[Test Delivery] " : "";
+  const subject = `${subjectPrefix}Refund processed - XioohTravel booking ${booking.id}`;
+  const replyTo = getBookingEmailReplyTo();
+
+  const details = [
+    renderRow("Booking ID", booking.id),
+    renderRow("Refund status", "Refund processed"),
+    renderRow("Refund amount", refundAmount),
+    renderRow("Refunded at", refundedAt),
+    renderRow("Pickup time (JST)", pickupTime),
+    renderRow("Pickup", pickupLocation),
+    renderRow("Drop-off", dropoffLocation),
+    renderRow("Contact", booking.contact_name),
+    renderRow("Email", booking.contact_email),
+  ];
+
+  if (booking.stripe_refund_id) {
+    details.push(renderRow("Stripe refund", booking.stripe_refund_id));
+  }
+
+  if (usingTestSender && testRecipient) {
+    details.splice(
+      2,
+      0,
+      renderRow("Delivery mode", "Test delivery via resend.dev"),
+      renderRow("Test recipient", testRecipient),
+      renderRow("Original customer email", booking.contact_email)
+    );
+  }
+
+  const introText = usingTestSender
+    ? `This is a test delivery sent to ${escapeHtml(testRecipient ?? "")}. The original customer email is ${escapeHtml(booking.contact_email)}.`
+    : "Your cancellation has been processed and the refund has been submitted to the original payment method. Actual arrival time depends on the bank or card issuer.";
+
+  const html = `
+    <!doctype html>
+    <html>
+      <body style="margin:0;background:#f8fafc;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+        <div style="max-width:640px;margin:0 auto;padding:32px 16px;">
+          <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:24px;overflow:hidden;">
+            <div style="padding:32px;background:linear-gradient(135deg,#0f172a 0%,#16a34a 100%);color:#ffffff;">
+              <div style="font-size:14px;letter-spacing:0.08em;text-transform:uppercase;opacity:0.8;">XioohTravel</div>
+              <h1 style="margin:12px 0 8px;font-size:28px;line-height:1.2;">Refund processed</h1>
+              <p style="margin:0;font-size:15px;line-height:1.7;opacity:0.92;">
+                ${introText}
+              </p>
+            </div>
+
+            <div style="padding:28px 32px;">
+              <table style="width:100%;border-collapse:collapse;">
+                ${details.join("")}
+              </table>
+
+              <div style="margin-top:28px;padding:20px;border-radius:18px;background:#ecfdf5;border:1px solid #bbf7d0;">
+                <div style="font-size:16px;font-weight:700;color:#047857;margin-bottom:8px;">Refund timing</div>
+                <div style="font-size:14px;line-height:1.7;color:#065f46;margin-bottom:14px;">
+                  Stripe has accepted the refund request. Banks and card issuers may take additional time to show the funds on the card statement.
+                </div>
+                <a
+                  href="${escapeHtml(ordersUrl)}"
+                  style="display:inline-block;padding:12px 18px;border-radius:999px;background:#16a34a;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;"
+                >
+                  View my orders
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+
+  const text = [
+    `${usingTestSender ? "[Test Delivery] " : ""}XioohTravel refund confirmation`,
+    "",
+    usingTestSender && testRecipient ? `Delivery mode: Test delivery via resend.dev` : null,
+    usingTestSender && testRecipient ? `Test recipient: ${testRecipient}` : null,
+    usingTestSender ? `Original customer email: ${booking.contact_email}` : null,
+    `Booking ID: ${booking.id}`,
+    "Refund status: Refund processed",
+    `Refund amount: ${refundAmount}`,
+    `Refunded at: ${refundedAt}`,
+    `Pickup time (JST): ${pickupTime}`,
+    `Pickup: ${pickupLocation}`,
+    `Drop-off: ${dropoffLocation}`,
+    booking.stripe_refund_id ? `Stripe refund: ${booking.stripe_refund_id}` : null,
+    "",
+    "Actual arrival time depends on the bank or card issuer.",
+    `View your orders: ${ordersUrl}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const emailPayload: ResendEmailPayload = {
+    from,
+    to: recipientEmail,
+    subject,
+    html,
+    text,
+    ...(replyTo ? { replyTo } : {}),
+  };
+
+  for (let attempt = 1; attempt <= PAYMENT_CONFIRMATION_EMAIL_MAX_ATTEMPTS; attempt += 1) {
+    const response = await sendResendEmailRequest(emailPayload, idempotencyKey);
+
+    if (!response.error) {
+      console.info("[email] Resend accepted booking refund confirmation", {
+        bookingId: booking.id,
+        recipientEmail: maskEmailForLog(recipientEmail),
+        providerId: response.data?.id ?? null,
+        attempt,
+      });
+
+      return {
+        providerId: response.data?.id ?? null,
+      };
+    }
+
+    const retryable = shouldRetryResendError(response.error);
+    console.error("[email] Resend rejected booking refund confirmation", {
+      bookingId: booking.id,
+      recipientEmail: maskEmailForLog(recipientEmail),
+      originalCustomerEmail: maskEmailForLog(booking.contact_email),
+      diagnostics,
+      responseError: response.error,
+      attempt,
+      retryable,
+    });
+
+    if (!retryable || attempt >= PAYMENT_CONFIRMATION_EMAIL_MAX_ATTEMPTS) {
+      throw new Error(response.error.message || "Failed to send refund confirmation email");
+    }
+
+    const delayMs = PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS[attempt - 1] ?? PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS[PAYMENT_CONFIRMATION_EMAIL_RETRY_DELAYS_MS.length - 1] ?? 1000;
+    console.warn("[email] Retrying booking refund confirmation", {
+      bookingId: booking.id,
+      attempt,
+      nextAttempt: attempt + 1,
+      delayMs,
+    });
+    await sleep(delayMs);
+  }
+
+  throw new Error("Failed to send refund confirmation email");
 }

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { CancelBookingSchema } from "@/lib/validators";
 import { canUserCancel } from "@/lib/bookingRules";
 import { getT } from "@/lib/i18n";
+import { sendRefundConfirmationEmailIfNeeded } from "@/lib/refundConfirmation";
 import { createBookingRefund, retrieveCheckoutSessionWithPaymentIntent } from "@/lib/stripe";
 
 function getPaymentIntentIdFromCheckoutSession(session: Awaited<ReturnType<typeof retrieveCheckoutSessionWithPaymentIntent>>) {
@@ -154,6 +155,16 @@ export async function POST(req: Request) {
     );
 
     await client.query("COMMIT");
+
+    if (refundStatus === "succeeded") {
+      await sendRefundConfirmationEmailIfNeeded(bookingId).catch((error) => {
+        console.error("[cancel_booking] Failed to send refund confirmation email", {
+          bookingId,
+          refundId: refund.id,
+          error,
+        });
+      });
+    }
 
     return NextResponse.json({
       ok: true,
