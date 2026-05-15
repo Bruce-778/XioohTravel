@@ -76,6 +76,12 @@ type AdminRow = {
   pricingNote: string | null;
   cancelReason: string | null;
   cancelledAt: string | null;
+  stripeRefundId: string | null;
+  stripeRefundStatus: string | null;
+  refundAmountJpy: number | null;
+  refundRequestedAt: string | null;
+  refundedAt: string | null;
+  refundFailureReason: string | null;
 };
 type PricingRule = {
   id: string;
@@ -260,6 +266,16 @@ type Labels = {
   createdAt: string;
   cancelledAt: string;
   cancelReasonValue: string;
+  refundStatus: string;
+  refundAmount: string;
+  refundRequestedAt: string;
+  refundedAt: string;
+  refundReference: string;
+  refundFailureReason: string;
+  refundNotRequired: string;
+  refundPending: string;
+  refundSucceeded: string;
+  refundFailed: string;
   notProvided: string;
   yes: string;
   no: string;
@@ -746,6 +762,22 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     }
 
     return value;
+  }
+
+  function getRefundStatusLabel(status: string | null | undefined) {
+    switch (status) {
+      case "not_required":
+        return labels.refundNotRequired;
+      case "succeeded":
+        return labels.refundSucceeded;
+      case "failed":
+      case "canceled":
+        return labels.refundFailed;
+      case "pending":
+      case "requires_action":
+      default:
+        return status ? labels.refundPending : labels.notProvided;
+    }
   }
 
   async function exportOrders() {
@@ -1601,6 +1633,36 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                                   <div>
                                     <div className="text-xs text-slate-500">{labels.cancelReasonValue}</div>
                                     <div className="font-medium text-slate-900 break-words">{renderDetailValue(r.cancelReason)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.refundStatus}</div>
+                                    <div className="font-medium text-slate-900">{getRefundStatusLabel(r.stripeRefundStatus)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.refundAmount}</div>
+                                    <div className="font-medium text-slate-900">
+                                      {r.refundAmountJpy ? formatMoneyFromJpy(r.refundAmountJpy, currency, locale) : labels.notProvided}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.refundRequestedAt}</div>
+                                    <div className="font-medium text-slate-900">
+                                      {r.refundRequestedAt ? formatDateTimeJST(r.refundRequestedAt, locale) : labels.notProvided}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.refundedAt}</div>
+                                    <div className="font-medium text-slate-900">
+                                      {r.refundedAt ? formatDateTimeJST(r.refundedAt, locale) : labels.notProvided}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.refundReference}</div>
+                                    <div className="font-medium text-slate-900 break-all">{renderDetailValue(r.stripeRefundId)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-xs text-slate-500">{labels.refundFailureReason}</div>
+                                    <div className="font-medium text-rose-700 break-words">{renderDetailValue(r.refundFailureReason)}</div>
                                   </div>
                                 </div>
                               </div>

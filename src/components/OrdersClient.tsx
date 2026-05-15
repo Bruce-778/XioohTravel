@@ -47,6 +47,12 @@ type BookingRow = {
   pricingNote: string | null;
   cancelReason: string | null;
   cancelledAt: string | null;
+  stripeRefundId: string | null;
+  stripeRefundStatus: string | null;
+  refundAmountJpy: number | null;
+  refundRequestedAt: string | null;
+  refundedAt: string | null;
+  refundFailureReason: string | null;
   totalJpy: number;
   vehicleName: string;
 };
@@ -123,6 +129,17 @@ type Labels = {
   createdAt: string;
   cancelledAt: string;
   cancelReasonValue: string;
+  refundStatus: string;
+  refundAmount: string;
+  refundRequestedAt: string;
+  refundedAt: string;
+  refundReference: string;
+  refundFailureReason: string;
+  refundNotRequired: string;
+  refundPending: string;
+  refundSucceeded: string;
+  refundFailed: string;
+  refundCancelTip: string;
   notProvided: string;
   yes: string;
   no: string;
@@ -291,6 +308,22 @@ export function OrdersClient({
       return labels.notProvided;
     }
     return value;
+  }
+
+  function getRefundStatusLabel(status: string | null | undefined) {
+    switch (status) {
+      case "not_required":
+        return labels.refundNotRequired;
+      case "succeeded":
+        return labels.refundSucceeded;
+      case "failed":
+      case "canceled":
+        return labels.refundFailed;
+      case "pending":
+      case "requires_action":
+      default:
+        return status ? labels.refundPending : labels.notProvided;
+    }
   }
 
   const showResults = Boolean(user) || hasSearched;
@@ -617,6 +650,38 @@ export function OrdersClient({
                                   <dt className="text-slate-500">{labels.cancelReasonValue}</dt>
                                   <dd className="font-medium text-slate-900 text-right">{renderDetailValue(row.cancelReason)}</dd>
                                 </div>
+                                <div className="flex justify-between gap-4">
+                                  <dt className="text-slate-500">{labels.refundStatus}</dt>
+                                  <dd className="font-medium text-slate-900 text-right">{getRefundStatusLabel(row.stripeRefundStatus)}</dd>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                  <dt className="text-slate-500">{labels.refundAmount}</dt>
+                                  <dd className="font-medium text-slate-900 text-right">
+                                    {row.refundAmountJpy ? formatMoneyFromJpy(row.refundAmountJpy, currency, locale) : labels.notProvided}
+                                  </dd>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                  <dt className="text-slate-500">{labels.refundRequestedAt}</dt>
+                                  <dd className="font-medium text-slate-900 text-right">
+                                    {row.refundRequestedAt ? formatDateTimeJST(row.refundRequestedAt, locale) : labels.notProvided}
+                                  </dd>
+                                </div>
+                                <div className="flex justify-between gap-4">
+                                  <dt className="text-slate-500">{labels.refundedAt}</dt>
+                                  <dd className="font-medium text-slate-900 text-right">
+                                    {row.refundedAt ? formatDateTimeJST(row.refundedAt, locale) : labels.notProvided}
+                                  </dd>
+                                </div>
+                                <div className="flex justify-between gap-4 md:col-span-2">
+                                  <dt className="text-slate-500">{labels.refundReference}</dt>
+                                  <dd className="font-medium text-slate-900 text-right break-all">{renderDetailValue(row.stripeRefundId)}</dd>
+                                </div>
+                                {row.refundFailureReason ? (
+                                  <div className="flex justify-between gap-4 md:col-span-2">
+                                    <dt className="text-slate-500">{labels.refundFailureReason}</dt>
+                                    <dd className="font-medium text-rose-700 text-right">{row.refundFailureReason}</dd>
+                                  </div>
+                                ) : null}
                               </dl>
                             </div>
                           </div>
@@ -649,6 +714,11 @@ export function OrdersClient({
             <p className="text-sm text-slate-500 mb-6">
               {labels.id}: <span className="font-mono text-xs">{cancelBookingId}</span>
             </p>
+            {cancelBooking.status !== "PENDING_PAYMENT" ? (
+              <div className="mb-5 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-800">
+                {labels.refundCancelTip}
+              </div>
+            ) : null}
 
             <div className="space-y-4">
               <div>

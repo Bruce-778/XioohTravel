@@ -73,6 +73,12 @@ CREATE TABLE IF NOT EXISTS bookings (
   paid_at TIMESTAMPTZ,
   payment_confirmation_email_sent_at TIMESTAMPTZ,
   payment_confirmation_email_provider_id TEXT,
+  stripe_refund_id TEXT,
+  stripe_refund_status TEXT,
+  refund_amount_jpy INTEGER,
+  refund_requested_at TIMESTAMPTZ,
+  refunded_at TIMESTAMPTZ,
+  refund_failure_reason TEXT,
   vehicle_type_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -157,6 +163,12 @@ ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS stripe_payment_status TE
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS payment_confirmation_email_sent_at TIMESTAMPTZ;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS payment_confirmation_email_provider_id TEXT;
+ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS stripe_refund_id TEXT;
+ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS stripe_refund_status TEXT;
+ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS refund_amount_jpy INTEGER;
+ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS refund_requested_at TIMESTAMPTZ;
+ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
+ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS refund_failure_reason TEXT;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS vehicle_type_id TEXT;
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE IF EXISTS bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
@@ -579,6 +591,9 @@ CREATE INDEX IF NOT EXISTS idx_bookings_stripe_checkout_session_id
 
 CREATE INDEX IF NOT EXISTS idx_bookings_payment_confirmation_email_sent_at
   ON bookings(payment_confirmation_email_sent_at);
+
+CREATE INDEX IF NOT EXISTS idx_bookings_stripe_refund_id
+  ON bookings(stripe_refund_id);
 
 CREATE INDEX IF NOT EXISTS idx_user_emails_user_id
   ON user_emails(user_id);

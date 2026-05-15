@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { syncBookingPaymentFromCheckoutSession } from "@/lib/bookings";
+import { syncBookingPaymentFromCheckoutSession, syncBookingRefundFromStripeRefund } from "@/lib/bookings";
 import { getPaymentConfirmationEmailDiagnostics } from "@/lib/email";
 import { sendPaymentConfirmationEmailIfNeeded } from "@/lib/paymentConfirmation";
 import { getStripe } from "@/lib/stripe";
@@ -51,6 +51,20 @@ export async function POST(req: Request) {
           emailResult,
         });
       }
+    } else if (
+      event.type === "refund.created" ||
+      event.type === "refund.updated" ||
+      event.type === "refund.failed"
+    ) {
+      const refund = event.data.object as Stripe.Refund;
+      const bookingId = await syncBookingRefundFromStripeRefund(refund);
+
+      console.info("[stripe_webhook] Synced booking refund status", {
+        eventId: event.id,
+        bookingId,
+        refundId: refund.id,
+        refundStatus: refund.status,
+      });
     }
 
     return NextResponse.json({ received: true });

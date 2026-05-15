@@ -90,6 +90,13 @@ function getStripePaymentIntentId(session: Stripe.Checkout.Session) {
     : session.payment_intent.id;
 }
 
+function getStripeRefundPaymentIntentId(refund: Stripe.Refund) {
+  if (!refund.payment_intent) return null;
+  return typeof refund.payment_intent === "string"
+    ? refund.payment_intent
+    : refund.payment_intent.id;
+}
+
 export async function calculateBookingSnapshot(data: CreateBookingInput) {
   const pickupTime = new Date(data.pickupTime);
   const now = new Date();
@@ -335,4 +342,38 @@ export async function syncBookingPaymentFromCheckoutSession(session: Stripe.Chec
   );
 
   return bookingId;
+}
+
+export async function syncBookingRefundFromStripeRefund(refund: Stripe.Refund) {
+  const bookingId = typeof refund.metadata?.bookingId === "string" ? refund.metadata.bookingId : null;
+  const paymentIntentId = getStripeRefundPaymentIntentId(refund);
+  const refundStatus = refund.status ?? null;
+  const refundedAt = refundStatus === "succeeded" ? new Date() : null;
+  const refundFailureReason = refund.failure_reason ?? null;
+
+  if (!bookingId && !paymentIntentId) {
+    return null;
+  }
+
+  const result = await db.query(
+    `UPDATE bookings
+     SET stripe_refund_id = COALESCE(stripe_refund_id, $2),
+         stripe_refund_status = COALESCE($3, stripe_refund_status),
+         refund_amount_jpy = COALESCE(refund_amount_jpy, $4),
+         refund_requested_at = COALESCE(refund_requested_at, NOW()),
+         refunded_at = CASE
+           WHEN $5::timestamptz IS NOT NULL THEN COALESCE(refunded_at, $5)
+           ELSE refunded_at
+         END,
+         refund_failure_reason = $6,
+         updated_at = NOW()
+     WHERE ($1::text IS NOT NULL AND id = $1)
+        OR ($1::text IS NULL AND stripe_refund_id = $2)
+        OR ($1::text IS NULL AND stripe_refund_id IS NULL AND stripe_payment_intent_id = $7)
+     RETURNING id`,
+    [bookingId, refund.id, refundStatus, refund.amount ?? null, refundedAt, refundFailureReason, paymentIntentId]
+  );
+  const rows = result.rows as Array<{ id: string }>;
+
+  return rows[0]?.id ?? bookingId;
 }

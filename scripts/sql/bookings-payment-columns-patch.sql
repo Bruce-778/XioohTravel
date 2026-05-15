@@ -17,6 +17,24 @@ ALTER TABLE IF EXISTS bookings
   ADD COLUMN IF NOT EXISTS payment_confirmation_email_provider_id TEXT;
 
 ALTER TABLE IF EXISTS bookings
+  ADD COLUMN IF NOT EXISTS stripe_refund_id TEXT;
+
+ALTER TABLE IF EXISTS bookings
+  ADD COLUMN IF NOT EXISTS stripe_refund_status TEXT;
+
+ALTER TABLE IF EXISTS bookings
+  ADD COLUMN IF NOT EXISTS refund_amount_jpy INTEGER;
+
+ALTER TABLE IF EXISTS bookings
+  ADD COLUMN IF NOT EXISTS refund_requested_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS bookings
+  ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
+
+ALTER TABLE IF EXISTS bookings
+  ADD COLUMN IF NOT EXISTS refund_failure_reason TEXT;
+
+ALTER TABLE IF EXISTS bookings
   ALTER COLUMN stripe_payment_status SET DEFAULT 'unpaid';
 
 CREATE INDEX IF NOT EXISTS idx_bookings_stripe_checkout_session_id
@@ -24,3 +42,6 @@ CREATE INDEX IF NOT EXISTS idx_bookings_stripe_checkout_session_id
 
 CREATE INDEX IF NOT EXISTS idx_bookings_payment_confirmation_email_sent_at
   ON bookings(payment_confirmation_email_sent_at);
+
+CREATE INDEX IF NOT EXISTS idx_bookings_stripe_refund_id
+  ON bookings(stripe_refund_id);

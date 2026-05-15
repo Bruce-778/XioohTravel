@@ -194,3 +194,33 @@ export async function createBookingCheckoutSession(input: CreateCheckoutSessionI
 export async function retrieveCheckoutSession(sessionId: string) {
   return getStripe().checkout.sessions.retrieve(sessionId);
 }
+
+export async function retrieveCheckoutSessionWithPaymentIntent(sessionId: string) {
+  return getStripe().checkout.sessions.retrieve(sessionId, {
+    expand: ["payment_intent"],
+  });
+}
+
+export async function createBookingRefund({
+  bookingId,
+  paymentIntentId,
+  amountJpy,
+}: {
+  bookingId: string;
+  paymentIntentId: string;
+  amountJpy: number;
+}) {
+  return getStripe().refunds.create(
+    {
+      payment_intent: paymentIntentId,
+      amount: amountJpy,
+      reason: "requested_by_customer",
+      metadata: {
+        bookingId,
+      },
+    },
+    {
+      idempotencyKey: `booking-cancel-refund-${bookingId}`,
+    }
+  );
+}

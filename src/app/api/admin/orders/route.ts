@@ -74,6 +74,12 @@ export async function GET(req: Request) {
     pricingNote: b.pricing_note ?? null,
     cancelReason: b.cancel_reason ?? null,
     cancelledAt: b.cancelled_at ? new Date(b.cancelled_at).toISOString() : null,
+    stripeRefundId: b.stripe_refund_id ?? null,
+    stripeRefundStatus: b.stripe_refund_status ?? null,
+    refundAmountJpy: b.refund_amount_jpy ?? null,
+    refundRequestedAt: b.refund_requested_at ? new Date(b.refund_requested_at).toISOString() : null,
+    refundedAt: b.refunded_at ? new Date(b.refunded_at).toISOString() : null,
+    refundFailureReason: b.refund_failure_reason ?? null,
   }));
 
   return NextResponse.json({ rows });

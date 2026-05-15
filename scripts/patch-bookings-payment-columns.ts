@@ -57,7 +57,13 @@ async function main() {
            'stripe_payment_status',
            'paid_at',
            'payment_confirmation_email_sent_at',
-           'payment_confirmation_email_provider_id'
+           'payment_confirmation_email_provider_id',
+           'stripe_refund_id',
+           'stripe_refund_status',
+           'refund_amount_jpy',
+           'refund_requested_at',
+           'refunded_at',
+           'refund_failure_reason'
          )
        ORDER BY column_name`
     );
