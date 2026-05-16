@@ -21,7 +21,7 @@ export const dicts: Record<Locale, Dict> = {
     "currency.cny": "人民币 CNY",
     "currency.usd": "美元 USD",
 
-    "home.badge": "固定价格 · 中文客服 · 多车型可选",
+    "home.badge": "固定价格 · 中英文客服 · 多车型可选",
     "home.title": "XioohTravel 机场接送预订",
     "home.subtitle":
       "像 Ctrip / Klook 一样快速下单：填写航班、上车点、下车点、人数行李，选择车型即可完成预订。",
@@ -117,7 +117,7 @@ export const dicts: Record<Locale, Dict> = {
     "home.faq.items.findDriver.question": "飞机落地后，我要怎样找到司机？",
     "home.faq.items.findDriver.answer": "如果你已加购举牌服务，司机会按订单信息在约定地点举牌等候；未加购举牌服务时，我们会按订单中的航班与接送信息安排会合方式。请保持手机可联系，并留意订单中提供的接送说明。",
     "contact.title": "联系我们",
-    "contact.subtitle": "如果您有任何疑问，请通过以下方式联系我们的中文客服",
+    "contact.subtitle": "如果您有任何疑问，请通过以下方式联系我们的团队客服",
     "contact.whatsapp": "WhatsApp",
     "contact.email": "电子邮箱",
     "contact.speed": "响应迅速",
@@ -574,7 +574,7 @@ export const dicts: Record<Locale, Dict> = {
     "status.CANCELLED": "已取消",
 
     "footer.brand": "XioohTravel",
-    "footer.desc": "机场接送机预订平台。支持多车型选择、价格透明、中文客服。",
+    "footer.desc": "机场接送机预订平台。支持多车型选择、价格透明、中英文客服。",
     "footer.description": "专注日本机场接送预订，提供固定价格、多车型、司机接送和客服协助。",
     "footer.contact": "联系我们",
     "footer.contactUs": "联系我们",
