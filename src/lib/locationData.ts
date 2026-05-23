@@ -150,6 +150,8 @@ const DERIVED_AREA_EN_SUFFIXES = new Set([
   "garden",
   "park",
   "exit",
+  "store",
+  "shop",
 ]);
 
 const DERIVED_AREA_CJK_SUFFIXES = [
@@ -164,15 +166,22 @@ const DERIVED_AREA_CJK_SUFFIXES = [
   "中心",
   "公园",
   "出口",
+  "店",
+  "ビル",
 ];
 
 function normalizeLocationInput(value: string) {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[()]/g, " ")
-    .replace(/[._/,()-]+/g, " ")
+    .replace(/[()（）]/g, " ")
+    .replace(/[〒]/g, " ")
+    .replace(/[._/,，、・:：;；\-−–—ー]+/g, " ")
     .replace(/\s+/g, " ");
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function matchesAlias(normalizedInput: string, alias: string) {
@@ -229,6 +238,17 @@ function startsWithDerivedAreaSuffix(remainder: string) {
   );
 }
 
+function matchesAreaAliasInsideAddress(normalizedInput: string, alias: string) {
+  if (!normalizedInput || !alias) return false;
+
+  if (hasCjkText(alias)) {
+    return normalizedInput.includes(alias);
+  }
+
+  const pattern = new RegExp(`(^|\\s)${escapeRegExp(alias)}(\\s|$)`);
+  return pattern.test(normalizedInput);
+}
+
 export function findAirportByCode(code: string): AirportTerminal | undefined {
   return AIRPORTS.find((a) => a.code === code.toUpperCase());
 }
@@ -263,6 +283,27 @@ export function findDerivedAreaByInput(input: string): PopularArea | undefined {
   }
 
   return undefined;
+}
+
+export function findContainedAreaByInput(input: string): PopularArea | undefined {
+  const normalized = normalizeLocationInput(input);
+  if (!normalized) return undefined;
+
+  const candidates = POPULAR_AREAS.flatMap((area) =>
+    getAreaAliases(area).map((alias) => ({ area, alias }))
+  ).sort((a, b) => b.alias.length - a.alias.length);
+
+  for (const { area, alias } of candidates) {
+    if (matchesAreaAliasInsideAddress(normalized, alias)) {
+      return area;
+    }
+  }
+
+  return undefined;
+}
+
+export function findPricingAreaByInput(input: string): PopularArea | undefined {
+  return findAreaByInput(input) || findDerivedAreaByInput(input) || findContainedAreaByInput(input);
 }
 
 export function findHotelByInput(input: string): PopularHotel | undefined {
@@ -307,9 +348,8 @@ export function findAirportByInput(input: string): AirportTerminal | undefined {
 export function isKnownPricingLocationInput(input: string) {
   return Boolean(
     findAirportByInput(input) ||
-      findAreaByInput(input) ||
       findHotelByInput(input) ||
-      findDerivedAreaByInput(input)
+      findPricingAreaByInput(input)
   );
 }
 
@@ -319,13 +359,14 @@ export function searchLocations(query: string, locale: string = "zh"): Array<Pop
   const normalizedQuery = normalizeLocationInput(query);
   const isZh = locale.startsWith("zh");
   const results: Array<PopularArea | PopularHotel> = [];
-  const derivedArea = findDerivedAreaByInput(query);
+  const matchedArea = findPricingAreaByInput(query);
 
-  if (derivedArea) {
-    results.push(derivedArea);
+  if (matchedArea) {
+    results.push(matchedArea);
   }
 
   for (const area of POPULAR_AREAS) {
+    if (matchedArea?.code === area.code) continue;
     const name = isZh ? area.name.zh : area.name.en;
     if (
       name.toLowerCase().includes(q) ||
@@ -368,8 +409,8 @@ export function getPricingAreaCode(location: string): string {
   const hotel = findHotelByInput(trimmed);
   if (hotel) return hotel.area;
 
-  const derivedArea = findDerivedAreaByInput(trimmed);
-  if (derivedArea) return derivedArea.code;
+  const pricingArea = findPricingAreaByInput(trimmed);
+  if (pricingArea) return pricingArea.code;
 
   return trimmed;
 }

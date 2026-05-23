@@ -5,7 +5,7 @@ import {
   AIRPORTS,
   POPULAR_AREAS,
   POPULAR_HOTELS,
-  findDerivedAreaByInput,
+  findPricingAreaByInput,
   getLocalizedLocation,
   type AirportTerminal,
   type PopularArea,
@@ -192,19 +192,19 @@ export function LocationSelector({
     }
   } else {
     // 地点模式：先展示热门，再展示 Google 搜索结果
-    const derivedArea = searchQuery ? findDerivedAreaByInput(searchQuery) : undefined;
-    if (derivedArea) {
-      const name = isZh ? derivedArea.name.zh : derivedArea.name.en;
+    const matchedArea = searchQuery ? findPricingAreaByInput(searchQuery) : undefined;
+    if (matchedArea) {
+      const name = isZh ? matchedArea.name.zh : matchedArea.name.en;
       suggestions.push({
         text: name,
-        subtitle: derivedArea.city,
+        subtitle: matchedArea.city,
         type: "area"
       });
     }
 
     // 热门区域
     for (const area of POPULAR_AREAS) {
-      if (derivedArea?.code === area.code) continue;
+      if (matchedArea?.code === area.code) continue;
       const name = isZh ? area.name.zh : area.name.en;
       if (!searchQuery || name.toLowerCase().includes(searchQuery.toLowerCase()) || area.code.toLowerCase().includes(searchQuery.toLowerCase())) {
         suggestions.push({
