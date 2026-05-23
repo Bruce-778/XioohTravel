@@ -71,6 +71,181 @@ type PricingComponent = {
   description?: string;
 };
 
+const STRIPE_PAYMENT_FEE_LOOKUP_ATTEMPTS = 5;
+const STRIPE_PAYMENT_FEE_LOOKUP_DELAY_MS = 800;
+
+export type StripePaymentFeeBreakdown = {
+  paymentIntentId: string;
+  chargeId: string;
+  balanceTransactionId: string;
+  feeJpy: number;
+  amountJpy: number;
+  chargeCurrency: string;
+  balanceTransactionCurrency: string;
+  balanceTransactionFee: number;
+  exchangeRate: number | null;
+  livemode: boolean;
+};
+
+export type StripePaymentFeeLookupFailureReason =
+  | "payment_intent_missing_charge"
+  | "charge_not_succeeded"
+  | "charge_missing_balance_transaction"
+  | "charge_currency_not_jpy"
+  | "exchange_rate_missing"
+  | "fee_missing"
+  | "stripe_lookup_error";
+
+export type StripePaymentFeeLookupFailure = {
+  paymentIntentId: string;
+  reason: StripePaymentFeeLookupFailureReason;
+  chargeId?: string;
+  chargeStatus?: string | null;
+  balanceTransactionId?: string;
+  currency?: string | null;
+  chargeCurrency?: string | null;
+  exchangeRate?: number | null;
+  livemode?: boolean;
+  message?: string;
+};
+
+export type StripePaymentFeeLookupResult =
+  | { ok: true; breakdown: StripePaymentFeeBreakdown }
+  | { ok: false; failure: StripePaymentFeeLookupFailure };
+
+type StripePaymentFeeLookupFailureResult = Extract<StripePaymentFeeLookupResult, { ok: false }>;
+
+function isStripeCharge(value: unknown): value is Stripe.Charge {
+  return Boolean(value && typeof value === "object" && (value as { object?: string }).object === "charge");
+}
+
+function isStripeBalanceTransaction(value: unknown): value is Stripe.BalanceTransaction {
+  return Boolean(value && typeof value === "object" && (value as { object?: string }).object === "balance_transaction");
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildStripePaymentFeeBreakdown(
+  paymentIntentId: string,
+  charge: Stripe.Charge,
+  balanceTransaction: Stripe.BalanceTransaction | null
+): StripePaymentFeeLookupResult {
+  if (!balanceTransaction) {
+    return {
+      ok: false,
+      failure: {
+        paymentIntentId,
+        reason: "charge_missing_balance_transaction",
+        chargeId: charge.id,
+        chargeStatus: charge.status,
+        livemode: charge.livemode,
+      },
+    };
+  }
+
+  const chargeCurrency = charge.currency.toLowerCase();
+  const balanceTransactionCurrency = balanceTransaction.currency.toLowerCase();
+  const exchangeRate = balanceTransaction.exchange_rate == null ? null : Number(balanceTransaction.exchange_rate);
+  if (chargeCurrency !== "jpy") {
+    return {
+      ok: false,
+      failure: {
+        paymentIntentId,
+        reason: "charge_currency_not_jpy",
+        chargeId: charge.id,
+        chargeStatus: charge.status,
+        balanceTransactionId: balanceTransaction.id,
+        currency: balanceTransactionCurrency,
+        chargeCurrency,
+        exchangeRate,
+        livemode: charge.livemode,
+      },
+    };
+  }
+
+  const balanceTransactionFee = Number(balanceTransaction.fee);
+  const balanceTransactionAmount = Number(balanceTransaction.amount);
+  if (
+    !Number.isInteger(balanceTransactionFee) ||
+    balanceTransactionFee < 0 ||
+    !Number.isInteger(balanceTransactionAmount) ||
+    balanceTransactionAmount <= 0
+  ) {
+    return {
+      ok: false,
+      failure: {
+        paymentIntentId,
+        reason: "fee_missing",
+        chargeId: charge.id,
+        chargeStatus: charge.status,
+        balanceTransactionId: balanceTransaction.id,
+        currency: balanceTransactionCurrency,
+        chargeCurrency,
+        exchangeRate,
+        livemode: charge.livemode,
+      },
+    };
+  }
+
+  let feeJpy = balanceTransactionFee;
+  if (balanceTransactionCurrency !== "jpy") {
+    if (!Number.isFinite(exchangeRate) || exchangeRate === null || exchangeRate <= 0) {
+      return {
+        ok: false,
+        failure: {
+          paymentIntentId,
+          reason: "exchange_rate_missing",
+          chargeId: charge.id,
+          chargeStatus: charge.status,
+          balanceTransactionId: balanceTransaction.id,
+          currency: balanceTransactionCurrency,
+          chargeCurrency,
+          exchangeRate,
+          livemode: charge.livemode,
+        },
+      };
+    }
+
+    feeJpy = Math.ceil(balanceTransactionFee / exchangeRate);
+  }
+
+  const amountJpy = Number(charge.amount);
+  if (!Number.isInteger(feeJpy) || feeJpy < 0 || !Number.isInteger(amountJpy) || amountJpy <= 0) {
+    return {
+      ok: false,
+      failure: {
+        paymentIntentId,
+        reason: "fee_missing",
+        chargeId: charge.id,
+        chargeStatus: charge.status,
+        balanceTransactionId: balanceTransaction.id,
+        currency: balanceTransactionCurrency,
+        chargeCurrency,
+        exchangeRate,
+        livemode: charge.livemode,
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    breakdown: {
+      paymentIntentId,
+      chargeId: charge.id,
+      balanceTransactionId: balanceTransaction.id,
+      feeJpy,
+      amountJpy,
+      chargeCurrency,
+      balanceTransactionCurrency,
+      balanceTransactionFee,
+      exchangeRate,
+      livemode: charge.livemode,
+    },
+  };
+}
+
 function buildCheckoutPricingComponents(input: CreateCheckoutSessionInput) {
   const pickupDate = input.pickupTime.toISOString().slice(0, 16).replace("T", " ");
   const routeLabel = `${input.pickupLocation} -> ${input.dropoffLocation}`;
@@ -201,14 +376,171 @@ export async function retrieveCheckoutSessionWithPaymentIntent(sessionId: string
   });
 }
 
+function buildStripePaymentFeeFailure(
+  paymentIntentId: string,
+  reason: StripePaymentFeeLookupFailureReason,
+  data?: Omit<StripePaymentFeeLookupFailure, "paymentIntentId" | "reason">
+): StripePaymentFeeLookupFailureResult {
+  return {
+    ok: false,
+    failure: {
+      paymentIntentId,
+      reason,
+      ...data,
+    },
+  };
+}
+
+async function findChargeForPaymentIntent(
+  stripe: Stripe,
+  paymentIntent: Stripe.PaymentIntent,
+  paymentIntentId: string
+): Promise<StripePaymentFeeLookupFailureResult | { ok: true; charge: Stripe.Charge }> {
+  let charge: Stripe.Charge | null = isStripeCharge(paymentIntent.latest_charge)
+    ? paymentIntent.latest_charge
+    : null;
+
+  if (!charge && typeof paymentIntent.latest_charge === "string") {
+    charge = await stripe.charges.retrieve(paymentIntent.latest_charge, {
+      expand: ["balance_transaction"],
+    });
+  }
+
+  if (!charge) {
+    const listedCharges = await stripe.charges.list({
+      payment_intent: paymentIntentId,
+      limit: 10,
+    });
+    charge = listedCharges.data.find((candidate) => candidate.status === "succeeded") ?? listedCharges.data[0] ?? null;
+  }
+
+  if (!charge) {
+    return buildStripePaymentFeeFailure(paymentIntentId, "payment_intent_missing_charge");
+  }
+
+  if (charge.status !== "succeeded") {
+    return buildStripePaymentFeeFailure(paymentIntentId, "charge_not_succeeded", {
+      chargeId: charge.id,
+      chargeStatus: charge.status,
+      livemode: charge.livemode,
+    });
+  }
+
+  return { ok: true, charge };
+}
+
+async function findBalanceTransactionForCharge(
+  stripe: Stripe,
+  paymentIntentId: string,
+  charge: Stripe.Charge
+): Promise<StripePaymentFeeLookupFailureResult | { ok: true; balanceTransaction: Stripe.BalanceTransaction }> {
+  let balanceTransaction: Stripe.BalanceTransaction | null = isStripeBalanceTransaction(charge.balance_transaction)
+    ? charge.balance_transaction
+    : null;
+
+  if (!balanceTransaction && typeof charge.balance_transaction === "string") {
+    balanceTransaction = await stripe.balanceTransactions.retrieve(charge.balance_transaction);
+  }
+
+  if (!balanceTransaction) {
+    const listedBalanceTransactions = await stripe.balanceTransactions.list({
+      source: charge.id,
+      limit: 1,
+    });
+    balanceTransaction = listedBalanceTransactions.data[0] ?? null;
+  }
+
+  if (!balanceTransaction) {
+    return buildStripePaymentFeeFailure(paymentIntentId, "charge_missing_balance_transaction", {
+      chargeId: charge.id,
+      chargeStatus: charge.status,
+      livemode: charge.livemode,
+    });
+  }
+
+  return { ok: true, balanceTransaction };
+}
+
+async function getStripePaymentFeeLookupResultOnce(paymentIntentId: string): Promise<StripePaymentFeeLookupResult> {
+  const stripe = getStripe();
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+    expand: ["latest_charge.balance_transaction"],
+  });
+
+  const chargeResult = await findChargeForPaymentIntent(stripe, paymentIntent, paymentIntentId);
+  if (!chargeResult.ok) {
+    return chargeResult;
+  }
+
+  const balanceTransactionResult = await findBalanceTransactionForCharge(stripe, paymentIntentId, chargeResult.charge);
+  if (!balanceTransactionResult.ok) {
+    return balanceTransactionResult;
+  }
+
+  return buildStripePaymentFeeBreakdown(paymentIntentId, chargeResult.charge, balanceTransactionResult.balanceTransaction);
+}
+
+export async function getStripePaymentFeeLookupResult(paymentIntentId: string): Promise<StripePaymentFeeLookupResult> {
+  let lastFailure: StripePaymentFeeLookupFailure | null = null;
+
+  for (let attempt = 1; attempt <= STRIPE_PAYMENT_FEE_LOOKUP_ATTEMPTS; attempt += 1) {
+    try {
+      const lookupResult = await getStripePaymentFeeLookupResultOnce(paymentIntentId);
+      if (lookupResult.ok) {
+        return lookupResult;
+      }
+      lastFailure = lookupResult.failure;
+    } catch (error: any) {
+      if (error?.message === "STRIPE_SECRET_KEY is not configured") {
+        throw error;
+      }
+      lastFailure = {
+        paymentIntentId,
+        reason: "stripe_lookup_error",
+        message: error?.message ?? "Stripe fee lookup failed",
+      };
+    }
+
+    if (attempt < STRIPE_PAYMENT_FEE_LOOKUP_ATTEMPTS) {
+      await sleep(STRIPE_PAYMENT_FEE_LOOKUP_DELAY_MS);
+    }
+  }
+
+  return {
+    ok: false,
+    failure: lastFailure ?? {
+      paymentIntentId,
+      reason: "stripe_lookup_error",
+      message: "Stripe fee lookup failed",
+    },
+  };
+}
+
+export async function getStripePaymentFeeBreakdown(paymentIntentId: string): Promise<StripePaymentFeeBreakdown | null> {
+  const lookupResult = await getStripePaymentFeeLookupResult(paymentIntentId);
+  return lookupResult.ok ? lookupResult.breakdown : null;
+}
+
 export async function createBookingRefund({
   bookingId,
   paymentIntentId,
   amountJpy,
+  originalAmountJpy,
+  stripeFeeDeductedJpy,
+  stripeBalanceTransactionId,
+  stripeBalanceTransactionCurrency,
+  stripeBalanceTransactionFee,
+  stripeExchangeRate,
 }: {
   bookingId: string;
   paymentIntentId: string;
   amountJpy: number;
+  originalAmountJpy?: number;
+  stripeFeeDeductedJpy?: number;
+  stripeBalanceTransactionId?: string;
+  stripeBalanceTransactionCurrency?: string;
+  stripeBalanceTransactionFee?: number;
+  stripeExchangeRate?: number | null;
 }) {
   return getStripe().refunds.create(
     {
@@ -217,6 +549,20 @@ export async function createBookingRefund({
       reason: "requested_by_customer",
       metadata: {
         bookingId,
+        ...(originalAmountJpy != null ? { originalAmountJpy: String(originalAmountJpy) } : {}),
+        ...(stripeFeeDeductedJpy != null
+          ? {
+              feeDeductedJpy: String(stripeFeeDeductedJpy),
+              stripeFeeDeductedJpy: String(stripeFeeDeductedJpy),
+            }
+          : {}),
+        ...(stripeBalanceTransactionId ? { stripeBalanceTransactionId } : {}),
+        ...(stripeBalanceTransactionCurrency ? { stripeBalanceTransactionCurrency } : {}),
+        ...(stripeBalanceTransactionFee != null
+          ? { stripeBalanceTransactionFee: String(stripeBalanceTransactionFee) }
+          : {}),
+        ...(stripeExchangeRate != null ? { stripeExchangeRate: String(stripeExchangeRate) } : {}),
+        refundAmountJpy: String(amountJpy),
       },
     },
     {

@@ -39,6 +39,8 @@ export type RefundConfirmationBooking = PaymentConfirmationBooking & {
   stripe_refund_id: string | null;
   stripe_refund_status: string | null;
   refund_amount_jpy: number | null;
+  stripe_payment_fee_jpy: number | null;
+  refund_fee_deducted_jpy: number | null;
   refund_requested_at: Date | string | null;
   refunded_at: Date | string | null;
 };
@@ -734,6 +736,9 @@ export async function sendBookingRefundConfirmationEmail(booking: RefundConfirma
   });
 
   const ordersUrl = getOrdersUrl(booking.contact_email);
+  const originalPaidAmount = formatCurrencyJpy(Number(booking.pricing_total_jpy ?? 0));
+  const feeDeductedJpy = Number(booking.refund_fee_deducted_jpy ?? booking.stripe_payment_fee_jpy ?? 0);
+  const feeDeducted = formatCurrencyJpy(feeDeductedJpy);
   const refundAmount = formatCurrencyJpy(Number(booking.refund_amount_jpy ?? booking.pricing_total_jpy ?? 0));
   const pickupTime = formatDateTimeJST(booking.pickup_time, "en-US");
   const pickupLocation = getLocalizedLocation(booking.pickup_location, "en");
@@ -746,6 +751,8 @@ export async function sendBookingRefundConfirmationEmail(booking: RefundConfirma
   const details = [
     renderRow("Booking ID", booking.id),
     renderRow("Refund status", "Refund processed"),
+    renderRow("Original paid amount", originalPaidAmount),
+    renderRow("Stripe actual processing fee deducted", feeDeducted),
     renderRow("Refund amount", refundAmount),
     renderRow("Refunded at", refundedAt),
     renderRow("Pickup time (JST)", pickupTime),
@@ -771,7 +778,7 @@ export async function sendBookingRefundConfirmationEmail(booking: RefundConfirma
 
   const introText = usingTestSender
     ? `This is a test delivery sent to ${escapeHtml(testRecipient ?? "")}. The original customer email is ${escapeHtml(booking.contact_email)}.`
-    : "Your cancellation has been processed and the refund has been submitted to the original payment method. Actual arrival time depends on the bank or card issuer.";
+    : "Your cancellation has been processed. The Stripe processing fee is non-refundable and has been deducted from the refund amount. Actual arrival time depends on the bank or card issuer.";
 
   const html = `
     <!doctype html>
@@ -819,6 +826,8 @@ export async function sendBookingRefundConfirmationEmail(booking: RefundConfirma
     usingTestSender ? `Original customer email: ${booking.contact_email}` : null,
     `Booking ID: ${booking.id}`,
     "Refund status: Refund processed",
+    `Original paid amount: ${originalPaidAmount}`,
+    `Stripe actual processing fee deducted: ${feeDeducted}`,
     `Refund amount: ${refundAmount}`,
     `Refunded at: ${refundedAt}`,
     `Pickup time (JST): ${pickupTime}`,
@@ -1049,6 +1058,9 @@ export async function sendMerchantRefundNotificationEmail({
   const pickupTime = formatDateTimeJST(booking.pickup_time, "en-US");
   const pickupLocation = getLocalizedLocation(booking.pickup_location, "en");
   const dropoffLocation = getLocalizedLocation(booking.dropoff_location, "en");
+  const originalPaidAmount = formatCurrencyJpy(Number(booking.pricing_total_jpy ?? 0));
+  const feeDeductedJpy = Number(booking.refund_fee_deducted_jpy ?? booking.stripe_payment_fee_jpy ?? 0);
+  const feeDeducted = formatCurrencyJpy(feeDeductedJpy);
   const refundAmount = formatCurrencyJpy(Number(booking.refund_amount_jpy ?? booking.pricing_total_jpy ?? 0));
   const cancelledAt = booking.cancelled_at ? formatDateTimeJST(booking.cancelled_at, "en-US") : "Cancelled";
   const subject = `[Merchant] Booking cancelled ${booking.id} - refund ${booking.stripe_refund_status ?? "requested"}`;
@@ -1067,6 +1079,8 @@ export async function sendMerchantRefundNotificationEmail({
     renderRow("Cancelled at", cancelledAt),
     renderRow("Cancellation reason", booking.cancel_reason ?? "-"),
     renderRow("Refund status", booking.stripe_refund_status ?? "-"),
+    renderRow("Original paid amount", originalPaidAmount),
+    renderRow("Stripe actual processing fee deducted", feeDeducted),
     renderRow("Refund amount", refundAmount),
     renderRow("Stripe refund", booking.stripe_refund_id ?? "-"),
     renderRow("Pickup time (JST)", pickupTime),
@@ -1124,6 +1138,8 @@ export async function sendMerchantRefundNotificationEmail({
     `Cancelled at: ${cancelledAt}`,
     `Cancellation reason: ${booking.cancel_reason ?? "-"}`,
     `Refund status: ${booking.stripe_refund_status ?? "-"}`,
+    `Original paid amount: ${originalPaidAmount}`,
+    `Stripe actual processing fee deducted: ${feeDeducted}`,
     `Refund amount: ${refundAmount}`,
     `Stripe refund: ${booking.stripe_refund_id ?? "-"}`,
     `Pickup time (JST): ${pickupTime}`,

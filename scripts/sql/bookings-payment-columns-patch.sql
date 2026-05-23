@@ -8,6 +8,12 @@ ALTER TABLE IF EXISTS bookings
   ADD COLUMN IF NOT EXISTS stripe_payment_status TEXT;
 
 ALTER TABLE IF EXISTS bookings
+  ADD COLUMN IF NOT EXISTS stripe_payment_fee_jpy INTEGER;
+
+ALTER TABLE IF EXISTS bookings
+  ADD COLUMN IF NOT EXISTS stripe_balance_transaction_id TEXT;
+
+ALTER TABLE IF EXISTS bookings
   ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
 
 ALTER TABLE IF EXISTS bookings
@@ -24,6 +30,9 @@ ALTER TABLE IF EXISTS bookings
 
 ALTER TABLE IF EXISTS bookings
   ADD COLUMN IF NOT EXISTS refund_amount_jpy INTEGER;
+
+ALTER TABLE IF EXISTS bookings
+  ADD COLUMN IF NOT EXISTS refund_fee_deducted_jpy INTEGER;
 
 ALTER TABLE IF EXISTS bookings
   ADD COLUMN IF NOT EXISTS refund_requested_at TIMESTAMPTZ;

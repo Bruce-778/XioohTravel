@@ -111,6 +111,8 @@ async function getBookingForMerchantRefundNotification(client: PoolClient, booki
        b.stripe_refund_id,
        b.stripe_refund_status,
        b.refund_amount_jpy,
+       b.stripe_payment_fee_jpy,
+       b.refund_fee_deducted_jpy,
        b.refund_requested_at,
        b.refunded_at,
        b.cancel_reason,

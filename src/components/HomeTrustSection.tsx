@@ -30,7 +30,9 @@ export async function HomeTrustSection() {
       desc: t("home.service.item.attire.desc"),
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 6l3 2 3-2m-6 0l-3 4 3 2 3-4m3-2l3 4-3 2-3-4m-3 8v4m0 0H8m4 0h4" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 11a4 4 0 100-8 4 4 0 000 8z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 21a7 7 0 0114 0" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.5 14l1.5 2 1.5-2M12 16v4" />
         </svg>
       ),
     },
@@ -75,7 +77,9 @@ export async function HomeTrustSection() {
       desc: t("home.service.item.language.desc"),
       icon: (
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 5h12M9 3v2m1.5 0A15.954 15.954 0 018 12c0 2.21.45 4.314 1.26 6M13 17l4-10 4 10m-7 0h6" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h10a3 3 0 013 3v3a3 3 0 01-3 3H9l-5 4V8a3 3 0 013-3z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 10h2a3 3 0 013 3v6l-3-2h-4a3 3 0 01-3-3" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 9h5M10.5 7v2m0 0a7.5 7.5 0 01-2 4M10.5 9a7.5 7.5 0 002 4" />
         </svg>
       ),
     },

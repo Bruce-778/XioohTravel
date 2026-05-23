@@ -39,10 +39,10 @@ async function main() {
       throw lastError ?? new Error("Unable to connect to database");
     }
 
-    const sqlFile = new URL("./sql/bookings-payment-columns-patch.sql", import.meta.url);
+    const sqlFile = new URL("./sql/pricing-overrides-patch.sql", import.meta.url);
     const patchSql = await readFile(sqlFile, "utf8");
 
-    console.log("Applying bookings payment columns patch...");
+    console.log("Applying pricing overrides patch...");
 
     await client.query("BEGIN");
     await client.query(patchSql);
@@ -50,42 +50,19 @@ async function main() {
     const { rows } = await client.query<{ column_name: string }>(
       `SELECT column_name
        FROM information_schema.columns
-       WHERE table_name = 'bookings'
-         AND column_name IN (
-           'stripe_checkout_session_id',
-           'stripe_payment_intent_id',
-           'stripe_payment_status',
-           'stripe_payment_fee_jpy',
-           'stripe_balance_transaction_id',
-           'paid_at',
-           'payment_confirmation_email_sent_at',
-           'payment_confirmation_email_provider_id',
-           'stripe_refund_id',
-           'stripe_refund_status',
-           'refund_amount_jpy',
-           'refund_fee_deducted_jpy',
-           'refund_requested_at',
-           'refunded_at',
-           'refund_failure_reason',
-           'refund_confirmation_email_sent_at',
-           'refund_confirmation_email_provider_id',
-           'merchant_order_email_sent_at',
-           'merchant_order_email_provider_id',
-           'merchant_refund_email_sent_at',
-           'merchant_refund_email_provider_id'
-         )
-       ORDER BY column_name`
+       WHERE table_name = 'pricing_rule_overrides'
+       ORDER BY ordinal_position`
     );
 
     await client.query("COMMIT");
 
-    console.log("Patch applied. Available columns:");
+    console.log("Patch applied. pricing_rule_overrides columns:");
     for (const row of rows) {
       console.log(`- ${row.column_name}`);
     }
   } catch (error) {
     await client?.query("ROLLBACK").catch(() => undefined);
-    console.error("Failed to apply bookings payment columns patch:", error);
+    console.error("Failed to apply pricing overrides patch:", error);
     process.exitCode = 1;
   } finally {
     client?.release();

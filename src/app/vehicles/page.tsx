@@ -3,11 +3,12 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { SearchSchema } from "@/lib/validators";
 import { computeNightFee, isUrgentOrder } from "@/lib/bookingRules";
-import { formatDateTimeJST } from "@/lib/timeFormat";
+import { formatDateTimeJST, parseJstDateTime } from "@/lib/timeFormat";
 import { formatMoneyFromJpy, getCurrency } from "@/lib/currency";
 import { getT, getLocale } from "@/lib/i18n";
-import { getPricingAreaCode, getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
+import { getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
 import { getVehicleImageByKey } from "@/lib/vehicleImages";
+import { getEffectivePricingRulesForRoute } from "@/lib/effectivePricing";
 import { LuggageCapacityDisplay, type LuggageDisplayLabels } from "@/components/LuggageCapacityDisplay";
 
 export default async function VehiclesPage({
@@ -69,25 +70,22 @@ export default async function VehiclesPage({
     luggageMedium: String(q.luggageMedium),
     luggageLarge: String(q.luggageLarge),
   }).toString()}#book-now`;
-  const pickupTime = new Date(q.pickupTime);
+  const pickupTime = parseJstDateTime(q.pickupTime);
   const now = new Date();
   const isUrgent = isUrgentOrder(now, pickupTime);
   const isNight = computeNightFee(pickupTime);
-
-  const fromCode = getPricingAreaCode(q.fromArea);
-  const toCode = getPricingAreaCode(q.toArea);
 
   const { rows: vehicleTypes } = await db.query(
     "SELECT * FROM vehicle_types ORDER BY is_bus ASC, is_luxury ASC, seats ASC"
   );
 
-  const { rows: rules } = await db.query(
-    `SELECT * FROM pricing_rules 
-     WHERE from_area = $1 AND to_area = $2 AND trip_type = $3`,
-    [fromCode, toCode, q.tripType]
-  );
-
-  const ruleByVehicle = new Map(rules.map((r) => [r.vehicle_type_id, r]));
+  const rules = await getEffectivePricingRulesForRoute({
+    fromArea: q.fromArea,
+    toArea: q.toArea,
+    tripType: q.tripType,
+    pickupTime,
+  });
+  const ruleByVehicle = new Map(rules.map((rule) => [rule.vehicleTypeId, rule]));
 
   const vehicleKeyMap: Record<string, string> = {
     [VEHICLE_NAMES.ECONOMY_5]: "5seats",
@@ -156,7 +154,7 @@ export default async function VehiclesPage({
           
           let priceJpy = 0;
           if (hasRule) {
-            priceJpy = rule.base_price_jpy + (isNight ? rule.night_fee_jpy : 0) + (isUrgent ? rule.urgent_fee_jpy : 0);
+            priceJpy = rule.basePriceJpy + (isNight ? rule.nightFeeJpy : 0) + (isUrgent ? rule.urgentFeeJpy : 0);
           }
 
           const capacityExceeded =
@@ -242,6 +240,11 @@ export default async function VehiclesPage({
                       <div className="text-2xl font-bold text-slate-900">
                         {formatMoneyFromJpy(priceJpy, currency, locale)}
                       </div>
+                      {rule.source === "override" ? (
+                        <div className="mt-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                          {t("pricing.specialPriceApplied")}
+                        </div>
+                      ) : null}
                     </div>
                     {capacityExceeded ? (
                       <button disabled className="w-full px-6 py-2.5 rounded-xl bg-slate-100 text-slate-400 font-semibold cursor-not-allowed">

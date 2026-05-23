@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { CancelBookingSchema } from "@/lib/validators";
-import { canUserCancel } from "@/lib/bookingRules";
 import { getT } from "@/lib/i18n";
 import { sendMerchantRefundNotificationIfNeeded } from "@/lib/merchantNotification";
+import {
+  calculateBookingRefundPreview,
+  getPaidCancellationDecision,
+  isPaidBooking,
+  RefundAmountInvalidError,
+  RefundFeeUnavailableError,
+  RefundPaymentMissingError,
+} from "@/lib/refundAmounts";
 import { sendRefundConfirmationEmailIfNeeded } from "@/lib/refundConfirmation";
-import { createBookingRefund, retrieveCheckoutSessionWithPaymentIntent } from "@/lib/stripe";
-
-function getPaymentIntentIdFromCheckoutSession(session: Awaited<ReturnType<typeof retrieveCheckoutSessionWithPaymentIntent>>) {
-  if (!session.payment_intent) return null;
-  return typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id;
-}
-
-function isPaidBooking(booking: any) {
-  return booking.stripe_payment_status === "paid" || booking.status === "PAID" || booking.status === "CONFIRMED";
-}
+import { createBookingRefund } from "@/lib/stripe";
 
 function getRefundCompletedAt(status: string | null | undefined) {
   return status === "succeeded" ? new Date() : null;
@@ -56,8 +54,7 @@ export async function POST(req: Request) {
 
     const paidBooking = isPaidBooking(booking);
     if (paidBooking) {
-      const now = new Date();
-      const decision = canUserCancel(now, new Date(booking.pickup_time), booking.is_urgent);
+      const decision = getPaidCancellationDecision(booking);
       if (!decision.ok) {
         await client.query("ROLLBACK");
         return NextResponse.json({ error: t(decision.reason) }, { status: 400 });
@@ -99,41 +96,23 @@ export async function POST(req: Request) {
           id: booking.stripe_refund_id,
           status: booking.stripe_refund_status,
           amountJpy: booking.refund_amount_jpy,
+          feeDeductedJpy: booking.refund_fee_deducted_jpy ?? booking.stripe_payment_fee_jpy ?? null,
         },
       });
     }
 
-    let paymentIntentId = booking.stripe_payment_intent_id as string | null;
-    if (!paymentIntentId && booking.stripe_checkout_session_id) {
-      const checkoutSession = await retrieveCheckoutSessionWithPaymentIntent(booking.stripe_checkout_session_id);
-      paymentIntentId = getPaymentIntentIdFromCheckoutSession(checkoutSession);
-
-      if (paymentIntentId) {
-        await client.query(
-          `UPDATE bookings
-           SET stripe_payment_intent_id = $2,
-               updated_at = NOW()
-           WHERE id = $1`,
-          [bookingId, paymentIntentId]
-        );
-      }
-    }
-
-    if (!paymentIntentId) {
-      await client.query("ROLLBACK");
-      return NextResponse.json({ error: t("api.refundPaymentMissing") }, { status: 400 });
-    }
-
-    const amountJpy = Number(booking.pricing_total_jpy ?? 0);
-    if (!Number.isFinite(amountJpy) || amountJpy <= 0) {
-      await client.query("ROLLBACK");
-      return NextResponse.json({ error: t("api.refundAmountInvalid") }, { status: 400 });
-    }
+    const refundPreview = await calculateBookingRefundPreview(client, booking);
 
     const refund = await createBookingRefund({
       bookingId,
-      paymentIntentId,
-      amountJpy,
+      paymentIntentId: refundPreview.paymentIntentId,
+      amountJpy: refundPreview.refundAmountJpy,
+      originalAmountJpy: refundPreview.originalAmountJpy,
+      stripeFeeDeductedJpy: refundPreview.stripeFeeJpy,
+      stripeBalanceTransactionId: refundPreview.stripeBalanceTransactionId,
+      stripeBalanceTransactionCurrency: refundPreview.stripeBalanceTransactionCurrency,
+      stripeBalanceTransactionFee: refundPreview.stripeBalanceTransactionFee,
+      stripeExchangeRate: refundPreview.stripeExchangeRate,
     });
     const refundStatus = refund.status ?? "pending";
     const refundedAt = getRefundCompletedAt(refundStatus);
@@ -144,15 +123,29 @@ export async function POST(req: Request) {
            cancel_reason = $1,
            cancelled_at = NOW(),
            stripe_payment_intent_id = COALESCE(stripe_payment_intent_id, $2),
+           stripe_payment_fee_jpy = $8,
+           stripe_balance_transaction_id = $9,
            stripe_refund_id = $3,
            stripe_refund_status = $4,
            refund_amount_jpy = $5,
+           refund_fee_deducted_jpy = $10,
            refund_requested_at = NOW(),
            refunded_at = COALESCE(refunded_at, $6),
            refund_failure_reason = NULL,
            updated_at = NOW()
        WHERE id = $7`,
-      [reason, paymentIntentId, refund.id, refundStatus, amountJpy, refundedAt, bookingId]
+      [
+        reason,
+        refundPreview.paymentIntentId,
+        refund.id,
+        refundStatus,
+        refundPreview.refundAmountJpy,
+        refundedAt,
+        bookingId,
+        refundPreview.stripeFeeJpy,
+        refundPreview.stripeBalanceTransactionId,
+        refundPreview.stripeFeeJpy,
+      ]
     );
 
     await client.query("COMMIT");
@@ -181,11 +174,24 @@ export async function POST(req: Request) {
         required: true,
         id: refund.id,
         status: refundStatus,
-        amountJpy,
+        amountJpy: refundPreview.refundAmountJpy,
+        feeDeductedJpy: refundPreview.stripeFeeJpy,
       },
     });
   } catch (e: any) {
     await client.query("ROLLBACK").catch(() => undefined);
+    if (e instanceof RefundFeeUnavailableError) {
+      console.warn("[cancel_booking] Stripe actual fee is unavailable; blocking self-service refund", {
+        lookupFailure: e.lookupFailure,
+      });
+      return NextResponse.json({ error: t("api.refundFeeUnavailable") }, { status: 409 });
+    }
+    if (e instanceof RefundPaymentMissingError) {
+      return NextResponse.json({ error: t("api.refundPaymentMissing") }, { status: 400 });
+    }
+    if (e instanceof RefundAmountInvalidError) {
+      return NextResponse.json({ error: t("api.refundAmountInvalid") }, { status: 400 });
+    }
     console.error(e);
     if (e?.message === "STRIPE_SECRET_KEY is not configured") {
       return NextResponse.json({ error: t("api.stripeNotConfigured") }, { status: 500 });

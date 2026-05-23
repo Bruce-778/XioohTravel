@@ -9,7 +9,9 @@ import {
   CHILD_SEAT_FEE_JPY,
   MEET_AND_GREET_SIGN_FEE_JPY,
 } from "@/lib/bookingRules";
-import { getPricingAreaCode } from "@/lib/locationData";
+import { getEffectivePricingRule } from "@/lib/effectivePricing";
+import { getStripePaymentFeeLookupResult } from "@/lib/stripe";
+import { parseJstDateTime } from "@/lib/timeFormat";
 import { CreateBookingSchema } from "@/lib/validators";
 
 export class BookingError extends Error {
@@ -30,12 +32,6 @@ type VehicleRow = {
   luggage_small: number;
   luggage_medium: number;
   luggage_large: number;
-};
-
-type PricingRuleRow = {
-  base_price_jpy: number;
-  night_fee_jpy: number;
-  urgent_fee_jpy: number;
 };
 
 type BookingRow = {
@@ -97,8 +93,14 @@ function getStripeRefundPaymentIntentId(refund: Stripe.Refund) {
     : refund.payment_intent.id;
 }
 
+function parseStripeMetadataInteger(value: string | undefined) {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 export async function calculateBookingSnapshot(data: CreateBookingInput) {
-  const pickupTime = new Date(data.pickupTime);
+  const pickupTime = parseJstDateTime(data.pickupTime);
   const now = new Date();
   const isUrgent = isUrgentOrder(now, pickupTime);
   const isNight = computeNightFee(pickupTime);
@@ -113,19 +115,15 @@ export async function calculateBookingSnapshot(data: CreateBookingInput) {
   }
   const vehicle = vehicles[0];
 
-  const fromCode = getPricingAreaCode(data.fromArea);
-  const toCode = getPricingAreaCode(data.toArea);
+  const rule = await getEffectivePricingRule({
+    fromArea: data.fromArea,
+    toArea: data.toArea,
+    tripType: data.tripType,
+    vehicleTypeId: data.vehicleTypeId,
+    pickupTime,
+  });
 
-  const pricingRuleResult = await db.query(
-    `SELECT base_price_jpy, night_fee_jpy, urgent_fee_jpy
-     FROM pricing_rules
-     WHERE from_area = $1 AND to_area = $2 AND trip_type = $3 AND vehicle_type_id = $4
-     LIMIT 1`,
-    [fromCode, toCode, data.tripType, data.vehicleTypeId]
-  );
-  const rules = pricingRuleResult.rows as PricingRuleRow[];
-
-  if (rules.length === 0) {
+  if (!rule) {
     throw new BookingError("Price not found", "checkout.noPrice", 404);
   }
 
@@ -141,10 +139,9 @@ export async function calculateBookingSnapshot(data: CreateBookingInput) {
     throw new BookingError("Luggage exceeds capacity", "api.luggageExceeded", 400);
   }
 
-  const rule = rules[0];
-  const base = Number(rule.base_price_jpy ?? 0);
-  const night = isNight ? Number(rule.night_fee_jpy ?? 0) : 0;
-  const urgent = isUrgent ? Number(rule.urgent_fee_jpy ?? 0) : 0;
+  const base = Number(rule.basePriceJpy ?? 0);
+  const night = isNight ? Number(rule.nightFeeJpy ?? 0) : 0;
+  const urgent = isUrgent ? Number(rule.urgentFeeJpy ?? 0) : 0;
   const childSeat = (data.childSeats || 0) * CHILD_SEAT_FEE_JPY;
   const meetAndGreet = data.meetAndGreetSign ? MEET_AND_GREET_SIGN_FEE_JPY : 0;
   const total = base + night + urgent + childSeat + meetAndGreet;
@@ -350,6 +347,13 @@ export async function syncBookingRefundFromStripeRefund(refund: Stripe.Refund) {
   const refundStatus = refund.status ?? null;
   const refundedAt = refundStatus === "succeeded" ? new Date() : null;
   const refundFailureReason = refund.failure_reason ?? null;
+  const feeDeductedJpy =
+    parseStripeMetadataInteger(refund.metadata?.feeDeductedJpy) ??
+    parseStripeMetadataInteger(refund.metadata?.stripeFeeDeductedJpy);
+  const stripeBalanceTransactionId =
+    typeof refund.metadata?.stripeBalanceTransactionId === "string" && refund.metadata.stripeBalanceTransactionId
+      ? refund.metadata.stripeBalanceTransactionId
+      : null;
 
   if (!bookingId && !paymentIntentId) {
     return null;
@@ -360,6 +364,12 @@ export async function syncBookingRefundFromStripeRefund(refund: Stripe.Refund) {
      SET stripe_refund_id = COALESCE(stripe_refund_id, $2),
          stripe_refund_status = COALESCE($3, stripe_refund_status),
          refund_amount_jpy = COALESCE(refund_amount_jpy, $4),
+         refund_fee_deducted_jpy = COALESCE(refund_fee_deducted_jpy, $8),
+         stripe_payment_fee_jpy = CASE
+           WHEN $9::text IS NOT NULL THEN COALESCE(stripe_payment_fee_jpy, $8)
+           ELSE stripe_payment_fee_jpy
+         END,
+         stripe_balance_transaction_id = COALESCE(stripe_balance_transaction_id, $9),
          refund_requested_at = COALESCE(refund_requested_at, NOW()),
          refunded_at = CASE
            WHEN $5::timestamptz IS NOT NULL THEN COALESCE(refunded_at, $5)
@@ -371,9 +381,46 @@ export async function syncBookingRefundFromStripeRefund(refund: Stripe.Refund) {
         OR ($1::text IS NULL AND stripe_refund_id = $2)
         OR ($1::text IS NULL AND stripe_refund_id IS NULL AND stripe_payment_intent_id = $7)
      RETURNING id`,
-    [bookingId, refund.id, refundStatus, refund.amount ?? null, refundedAt, refundFailureReason, paymentIntentId]
+    [
+      bookingId,
+      refund.id,
+      refundStatus,
+      refund.amount ?? null,
+      refundedAt,
+      refundFailureReason,
+      paymentIntentId,
+      feeDeductedJpy,
+      stripeBalanceTransactionId,
+    ]
   );
   const rows = result.rows as Array<{ id: string }>;
 
   return rows[0]?.id ?? bookingId;
+}
+
+export async function syncBookingPaymentFeeFromPaymentIntentId(paymentIntentId: string, bookingId?: string | null) {
+  const lookupResult = await getStripePaymentFeeLookupResult(paymentIntentId);
+  if (!lookupResult.ok) {
+    console.warn("[bookings] Stripe payment fee sync skipped; actual fee is unavailable", {
+      bookingId,
+      lookupFailure: lookupResult.failure,
+    });
+    return null;
+  }
+
+  const feeBreakdown = lookupResult.breakdown;
+  const result = await db.query(
+    `UPDATE bookings
+     SET stripe_payment_intent_id = COALESCE(stripe_payment_intent_id, $2),
+         stripe_payment_fee_jpy = $3,
+         stripe_balance_transaction_id = $4,
+         updated_at = NOW()
+     WHERE ($1::text IS NOT NULL AND id = $1)
+        OR ($1::text IS NULL AND stripe_payment_intent_id = $2)
+     RETURNING id`,
+    [bookingId ?? null, paymentIntentId, feeBreakdown.feeJpy, feeBreakdown.balanceTransactionId]
+  );
+  const rows = result.rows as Array<{ id: string }>;
+
+  return rows[0]?.id ?? bookingId ?? null;
 }

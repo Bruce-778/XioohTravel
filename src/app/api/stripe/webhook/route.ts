@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
-import { syncBookingPaymentFromCheckoutSession, syncBookingRefundFromStripeRefund } from "@/lib/bookings";
+import {
+  syncBookingPaymentFeeFromPaymentIntentId,
+  syncBookingPaymentFromCheckoutSession,
+  syncBookingRefundFromStripeRefund,
+} from "@/lib/bookings";
 import { getPaymentConfirmationEmailDiagnostics } from "@/lib/email";
 import { sendMerchantRefundNotificationIfNeeded } from "@/lib/merchantNotification";
 import { sendPaymentConfirmationEmailIfNeeded } from "@/lib/paymentConfirmation";
@@ -51,6 +55,51 @@ export async function POST(req: Request) {
           eventId: event.id,
           bookingId,
           emailResult,
+        });
+      }
+    } else if (event.type === "payment_intent.succeeded") {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      const bookingId = typeof paymentIntent.metadata?.bookingId === "string" ? paymentIntent.metadata.bookingId : null;
+
+      const syncedBookingId = await syncBookingPaymentFeeFromPaymentIntentId(paymentIntent.id, bookingId).catch((error) => {
+        console.error("[stripe_webhook] Failed to sync Stripe payment fee", {
+          eventId: event.id,
+          paymentIntentId: paymentIntent.id,
+          bookingId,
+          error,
+        });
+        return null;
+      });
+
+      console.info("[stripe_webhook] Payment fee sync result", {
+        eventId: event.id,
+        paymentIntentId: paymentIntent.id,
+        bookingId: syncedBookingId,
+      });
+    } else if (event.type === "charge.succeeded" || event.type === "charge.updated") {
+      const charge = event.data.object as Stripe.Charge;
+      const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : null;
+      const bookingId = typeof charge.metadata?.bookingId === "string" ? charge.metadata.bookingId : null;
+
+      if (paymentIntentId) {
+        const syncedBookingId = await syncBookingPaymentFeeFromPaymentIntentId(paymentIntentId, bookingId).catch((error) => {
+          console.error("[stripe_webhook] Failed to sync Stripe payment fee from charge event", {
+            eventId: event.id,
+            eventType: event.type,
+            chargeId: charge.id,
+            paymentIntentId,
+            bookingId,
+            error,
+          });
+          return null;
+        });
+
+        console.info("[stripe_webhook] Charge fee sync result", {
+          eventId: event.id,
+          eventType: event.type,
+          chargeId: charge.id,
+          paymentIntentId,
+          bookingId: syncedBookingId,
         });
       }
     } else if (

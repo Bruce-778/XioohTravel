@@ -3,11 +3,12 @@ import { db } from "@/lib/db";
 import { SearchSchema } from "@/lib/validators";
 import { computeNightFee, isUrgentOrder } from "@/lib/bookingRules";
 import { CheckoutForm } from "@/components/CheckoutForm";
-import { formatDateTimeJST } from "@/lib/timeFormat";
+import { formatDateTimeJST, parseJstDateTime } from "@/lib/timeFormat";
 import { getCurrency } from "@/lib/currency";
 import { getT, getLocale } from "@/lib/i18n";
 import { z } from "zod";
-import { getPricingAreaCode, getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
+import { getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
+import { getEffectivePricingRule } from "@/lib/effectivePricing";
 
 export default async function CheckoutPage({
   searchParams
@@ -63,13 +64,10 @@ export default async function CheckoutPage({
     luggageMedium: String(q.luggageMedium),
     luggageLarge: String(q.luggageLarge),
   }).toString()}`;
-  const pickupTime = new Date(q.pickupTime);
+  const pickupTime = parseJstDateTime(q.pickupTime);
   const now = new Date();
   const isUrgent = isUrgentOrder(now, pickupTime);
   const isNight = computeNightFee(pickupTime);
-
-  const fromCode = getPricingAreaCode(q.fromArea);
-  const toCode = getPricingAreaCode(q.toArea);
 
   const { rows: vehicleRows } = await db.query("SELECT * FROM vehicle_types WHERE id = $1", [q.vehicleTypeId]);
   const vehicle = vehicleRows[0];
@@ -97,13 +95,13 @@ export default async function CheckoutPage({
     );
   }
 
-  const { rows: ruleRows } = await db.query(
-    `SELECT * FROM pricing_rules 
-     WHERE from_area = $1 AND to_area = $2 AND trip_type = $3 AND vehicle_type_id = $4
-     LIMIT 1`,
-    [fromCode, toCode, q.tripType, vehicle.id]
-  );
-  const rule = ruleRows[0];
+  const rule = await getEffectivePricingRule({
+    fromArea: q.fromArea,
+    toArea: q.toArea,
+    tripType: q.tripType,
+    vehicleTypeId: vehicle.id,
+    pickupTime,
+  });
 
   if (!rule) {
     return (
@@ -120,9 +118,9 @@ export default async function CheckoutPage({
     );
   }
 
-  const base = rule.base_price_jpy;
-  const night = isNight ? rule.night_fee_jpy : 0;
-  const urgent = isUrgent ? rule.urgent_fee_jpy : 0;
+  const base = rule.basePriceJpy;
+  const night = isNight ? rule.nightFeeJpy : 0;
+  const urgent = isUrgent ? rule.urgentFeeJpy : 0;
   const defaultPickupLocation = getLocalizedLocation(q.fromArea, locale);
   const defaultDropoffLocation = getLocalizedLocation(q.toArea, locale);
   const displayVehicle = t(`vehicle.${vehicleKeyMap[vehicle.name] || vehicle.name}`);
@@ -153,6 +151,11 @@ export default async function CheckoutPage({
           >
             {isUrgent ? t("checkout.urgentOrderHint") : t("checkout.nonUrgentOrderHint")}
           </div>
+          {rule.source === "override" ? (
+            <div className="max-w-full rounded-full border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm font-semibold leading-snug text-amber-700">
+              {t("pricing.specialPriceApplied")}
+            </div>
+          ) : null}
         </div>
       </div>
       <CheckoutForm

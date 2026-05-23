@@ -127,6 +127,45 @@ const AIRPORT_ALIASES: Record<AirportCode, string[]> = {
   CTS: ["new chitose", "new chitose airport", "sapporo airport", "新千岁机场"]
 };
 
+const AREA_ALIASES: Partial<Record<string, string[]>> = {
+  Ginza: ["銀座"],
+  Shibuya: ["渋谷"],
+  Namba: ["難波"],
+  Dotonbori: ["道頓堀"],
+  Gion: ["祇園"],
+  "Kyoto Station": ["京都駅", "京都站"],
+};
+
+const DERIVED_AREA_EN_SUFFIXES = new Set([
+  "station",
+  "sta",
+  "six",
+  "hotel",
+  "building",
+  "tower",
+  "mall",
+  "plaza",
+  "center",
+  "centre",
+  "garden",
+  "park",
+  "exit",
+]);
+
+const DERIVED_AREA_CJK_SUFFIXES = [
+  "站",
+  "车站",
+  "駅",
+  "酒店",
+  "饭店",
+  "大厦",
+  "商场",
+  "广场",
+  "中心",
+  "公园",
+  "出口",
+];
+
 function normalizeLocationInput(value: string) {
   return value
     .trim()
@@ -140,6 +179,10 @@ function matchesAlias(normalizedInput: string, alias: string) {
   return normalizedInput === alias || normalizedInput.startsWith(`${alias} `);
 }
 
+function hasCjkText(value: string) {
+  return /[\u3040-\u30ff\u3400-\u9fff]/.test(value);
+}
+
 function getAirportAliases(airport: AirportTerminal) {
   return [
     airport.code.toLowerCase(),
@@ -147,6 +190,43 @@ function getAirportAliases(airport: AirportTerminal) {
     normalizeLocationInput(airport.name.zh),
     ...AIRPORT_ALIASES[airport.code].map(normalizeLocationInput),
   ];
+}
+
+function getAreaAliases(area: PopularArea) {
+  return [
+    normalizeLocationInput(area.code),
+    normalizeLocationInput(area.name.zh),
+    normalizeLocationInput(area.name.en),
+    ...(AREA_ALIASES[area.code] ?? []).map(normalizeLocationInput),
+  ];
+}
+
+function getRemainderAfterAreaAlias(normalizedInput: string, alias: string) {
+  if (normalizedInput === alias) return "";
+
+  if (normalizedInput.startsWith(`${alias} `)) {
+    return normalizedInput.slice(alias.length + 1).trim();
+  }
+
+  if (hasCjkText(alias) && normalizedInput.startsWith(alias)) {
+    return normalizedInput.slice(alias.length).trim();
+  }
+
+  return null;
+}
+
+function startsWithDerivedAreaSuffix(remainder: string) {
+  const normalizedRemainder = normalizeLocationInput(remainder);
+  if (!normalizedRemainder) return false;
+
+  const firstToken = normalizedRemainder.split(" ")[0];
+  if (DERIVED_AREA_EN_SUFFIXES.has(firstToken)) {
+    return true;
+  }
+
+  return DERIVED_AREA_CJK_SUFFIXES.some((suffix) =>
+    normalizedRemainder.startsWith(normalizeLocationInput(suffix))
+  );
 }
 
 export function findAirportByCode(code: string): AirportTerminal | undefined {
@@ -162,13 +242,27 @@ export function findAreaByInput(input: string): PopularArea | undefined {
   if (!normalized) return undefined;
 
   return POPULAR_AREAS.find((area) => {
-    const aliases = [
-      normalizeLocationInput(area.code),
-      normalizeLocationInput(area.name.zh),
-      normalizeLocationInput(area.name.en),
-    ];
+    const aliases = getAreaAliases(area);
     return aliases.some((alias) => normalized === alias);
   });
+}
+
+export function findDerivedAreaByInput(input: string): PopularArea | undefined {
+  const normalized = normalizeLocationInput(input);
+  if (!normalized) return undefined;
+
+  const candidates = POPULAR_AREAS.flatMap((area) =>
+    getAreaAliases(area).map((alias) => ({ area, alias }))
+  ).sort((a, b) => b.alias.length - a.alias.length);
+
+  for (const { area, alias } of candidates) {
+    const remainder = getRemainderAfterAreaAlias(normalized, alias);
+    if (remainder && startsWithDerivedAreaSuffix(remainder)) {
+      return area;
+    }
+  }
+
+  return undefined;
 }
 
 export function findHotelByInput(input: string): PopularHotel | undefined {
@@ -211,18 +305,33 @@ export function findAirportByInput(input: string): AirportTerminal | undefined {
 }
 
 export function isKnownPricingLocationInput(input: string) {
-  return Boolean(findAirportByInput(input) || findAreaByInput(input) || findHotelByInput(input));
+  return Boolean(
+    findAirportByInput(input) ||
+      findAreaByInput(input) ||
+      findHotelByInput(input) ||
+      findDerivedAreaByInput(input)
+  );
 }
 
 export function searchLocations(query: string, locale: string = "zh"): Array<PopularArea | PopularHotel> {
   const q = query.toLowerCase().trim();
   if (!q) return [];
+  const normalizedQuery = normalizeLocationInput(query);
   const isZh = locale.startsWith("zh");
   const results: Array<PopularArea | PopularHotel> = [];
+  const derivedArea = findDerivedAreaByInput(query);
+
+  if (derivedArea) {
+    results.push(derivedArea);
+  }
 
   for (const area of POPULAR_AREAS) {
     const name = isZh ? area.name.zh : area.name.en;
-    if (name.toLowerCase().includes(q) || area.code.toLowerCase().includes(q)) {
+    if (
+      name.toLowerCase().includes(q) ||
+      area.code.toLowerCase().includes(q) ||
+      getAreaAliases(area).some((alias) => alias.includes(normalizedQuery))
+    ) {
       results.push(area);
     }
   }
@@ -258,6 +367,9 @@ export function getPricingAreaCode(location: string): string {
 
   const hotel = findHotelByInput(trimmed);
   if (hotel) return hotel.area;
+
+  const derivedArea = findDerivedAreaByInput(trimmed);
+  if (derivedArea) return derivedArea.code;
 
   return trimmed;
 }

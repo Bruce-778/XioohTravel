@@ -31,9 +31,13 @@ export function HomePromoGallery({
 
           <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {slides.map((slide) => (
-              <div
+              <a
                 key={slide.id}
-                className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm"
+                href={slide.imageSrc}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={slide.alt}
+                className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
               >
                 <div className="relative aspect-square overflow-hidden bg-white">
                   <Image
@@ -44,7 +48,7 @@ export function HomePromoGallery({
                     className="object-contain"
                   />
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>

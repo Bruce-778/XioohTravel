@@ -43,6 +43,21 @@ function sortPricingRules(rules: PricingRule[]) {
   });
 }
 
+function sortPricingOverrides(overrides: PricingOverride[]) {
+  return [...overrides].sort((a, b) => {
+    const timeCompare = new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+    if (timeCompare !== 0) return timeCompare;
+    const routeCompare = a.fromArea.localeCompare(b.fromArea) || a.toArea.localeCompare(b.toArea);
+    if (routeCompare !== 0) return routeCompare;
+    const tripCompare = a.tripType.localeCompare(b.tripType);
+    if (tripCompare !== 0) return tripCompare;
+    const aSeats = a.vehicleType.seats ?? 0;
+    const bSeats = b.vehicleType.seats ?? 0;
+    if (aSeats !== bSeats) return aSeats - bSeats;
+    return a.vehicleType.name.localeCompare(b.vehicleType.name);
+  });
+}
+
 type AdminRow = {
   id: string;
   createdAt: string;
@@ -77,9 +92,11 @@ type AdminRow = {
   pricingNote: string | null;
   cancelReason: string | null;
   cancelledAt: string | null;
+  stripePaymentFeeJpy: number | null;
   stripeRefundId: string | null;
   stripeRefundStatus: string | null;
   refundAmountJpy: number | null;
+  refundFeeDeductedJpy: number | null;
   refundRequestedAt: string | null;
   refundedAt: string | null;
   refundFailureReason: string | null;
@@ -107,6 +124,28 @@ type PricingRule = {
   };
 };
 
+type PricingOverride = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  fromArea: string;
+  toArea: string;
+  tripType: string;
+  vehicleTypeId: string;
+  startsAt: string;
+  endsAt: string;
+  basePriceJpy: number;
+  nightFeeJpy: number;
+  urgentFeeJpy: number;
+  note: string | null;
+  enabled: boolean;
+  vehicleType: {
+    id: string;
+    name: string;
+    seats?: number;
+  };
+};
+
 type VehicleType = {
   id: string;
   name: string;
@@ -121,6 +160,15 @@ type PricingRuleFormState = {
   basePriceJpy: number;
   nightFeeJpy: number;
   urgentFeeJpy: number;
+};
+
+type PricingOverrideFormState = PricingRuleFormState & {
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  note: string;
+  enabled: boolean;
 };
 
 type PricingLocationMode = "suggested" | "custom";
@@ -219,6 +267,24 @@ type Labels = {
   addRule: string;
   editRule: string;
   deleteRule: string;
+  pricingOverrides: string;
+  pricingOverridesSubtitle: string;
+  pricingOverridesMigrationRequired: string;
+  pricingOverridesMigrationCommand: string;
+  addOverride: string;
+  editOverride: string;
+  noOverrides: string;
+  overrideStartAt: string;
+  overrideEndAt: string;
+  overrideEnabled: string;
+  overrideNote: string;
+  overrideNotePlaceholder: string;
+  overrideConflict: string;
+  overrideFormRequired: string;
+  overrideInvalidPeriod: string;
+  specialPeriod: string;
+  enabled: string;
+  disabled: string;
   fromArea: string;
   toArea: string;
   tripType: string;
@@ -279,6 +345,7 @@ type Labels = {
   cancelReasonValue: string;
   refundStatus: string;
   refundAmount: string;
+  refundFeeDeducted: string;
   refundRequestedAt: string;
   refundedAt: string;
   refundReference: string;
@@ -382,6 +449,69 @@ function serializePricingRuleSnapshot(
   return JSON.stringify({ form, routeMode });
 }
 
+function serializePricingOverrideSnapshot(
+  form: PricingOverrideFormState,
+  routeMode: PricingRouteModeState
+) {
+  return JSON.stringify({ form, routeMode });
+}
+
+function padDatePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function getJstDateTimeParts(value: Date | string) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const getPart = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+
+  return {
+    date: `${getPart("year")}-${getPart("month")}-${getPart("day")}`,
+    time: `${getPart("hour")}:${getPart("minute")}`,
+  };
+}
+
+function buildJstIsoString(datePart: string, timePart: string) {
+  if (!datePart) {
+    return "";
+  }
+
+  const safeTime = timePart || "00:00";
+  const parsed = new Date(`${datePart}T${safeTime}:00+09:00`);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return parsed.toISOString();
+}
+
+function createDefaultOverridePeriod() {
+  const now = new Date();
+  const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const startDate = `${jstNow.getUTCFullYear()}-${padDatePart(jstNow.getUTCMonth() + 1)}-${padDatePart(
+    jstNow.getUTCDate() + 1
+  )}`;
+  const endDateValue = new Date(Date.UTC(jstNow.getUTCFullYear(), jstNow.getUTCMonth(), jstNow.getUTCDate() + 2));
+  const endDate = `${endDateValue.getUTCFullYear()}-${padDatePart(endDateValue.getUTCMonth() + 1)}-${padDatePart(
+    endDateValue.getUTCDate()
+  )}`;
+
+  return {
+    startDate,
+    startTime: "00:00",
+    endDate,
+    endTime: "00:00",
+  };
+}
+
 export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; locale?: string }) {
   const [token, setToken] = useState("");
   const [adminAccessStatus, setAdminAccessStatus] = useState<AdminAccessStatus>("checking");
@@ -389,6 +519,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingSaving, setPricingSaving] = useState(false);
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
+  const [deletingOverrideId, setDeletingOverrideId] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [showAdminSecret, setShowAdminSecret] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -429,9 +560,13 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
 
   // Pricing management
   const [pricingRules, setPricingRules] = useState<PricingRule[]>([]);
+  const [pricingOverrides, setPricingOverrides] = useState<PricingOverride[]>([]);
+  const [pricingOverridesMigrationRequired, setPricingOverridesMigrationRequired] = useState(false);
   const [vehicleTypes, setVehicleTypes] = useState<VehicleType[]>([]);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [editingOverrideId, setEditingOverrideId] = useState<string | null>(null);
   const [showRuleForm, setShowRuleForm] = useState(false);
+  const [showOverrideForm, setShowOverrideForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -445,11 +580,16 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     from: "suggested",
     to: "suggested",
   });
+  const [overrideRouteMode, setOverrideRouteMode] = useState<PricingRouteModeState>({
+    from: "suggested",
+    to: "suggested",
+  });
   const [importPreview, setImportPreview] = useState<PricingImportPreviewState | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importSubmitting, setImportSubmitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [ruleFormInitialSnapshot, setRuleFormInitialSnapshot] = useState("");
+  const [overrideFormInitialSnapshot, setOverrideFormInitialSnapshot] = useState("");
   const pricingFileInputRef = useRef<HTMLInputElement | null>(null);
   const isZh = locale.startsWith("zh");
   const dateTimeLocale = isZh ? "zh-CN" : "en-GB";
@@ -467,6 +607,18 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   }
 
   const [ruleForm, setRuleForm] = useState<PricingRuleFormState>(getBlankRuleForm());
+
+  function getBlankOverrideForm(): PricingOverrideFormState {
+    const defaultPeriod = createDefaultOverridePeriod();
+    return {
+      ...getBlankRuleForm(),
+      ...defaultPeriod,
+      note: "",
+      enabled: true,
+    };
+  }
+
+  const [overrideForm, setOverrideForm] = useState<PricingOverrideFormState>(getBlankOverrideForm());
 
   const pricingLocationOptions = useMemo(() => {
     const airportOptions = AIRPORTS.map((airport) => ({
@@ -544,12 +696,28 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     return defaults;
   }
 
+  function getDefaultOverrideForm(filters: PricingFilterState = appliedPricingFilters): PricingOverrideFormState {
+    const defaults = getBlankOverrideForm();
+    const ruleDefaults = getDefaultRuleForm(filters);
+    return {
+      ...defaults,
+      ...ruleDefaults,
+    };
+  }
+
   function isSuggestedLocationValue(value: string) {
     const normalized = normalizePricingRouteValue(value).toLowerCase();
     return knownPricingLocationValues.has(normalized);
   }
 
   function getRouteModeForForm(form: PricingRuleFormState): PricingRouteModeState {
+    return {
+      from: form.fromArea && !isSuggestedLocationValue(form.fromArea) ? "custom" : "suggested",
+      to: form.toArea && !isSuggestedLocationValue(form.toArea) ? "custom" : "suggested",
+    };
+  }
+
+  function getRouteModeForOverrideForm(form: PricingOverrideFormState): PricingRouteModeState {
     return {
       from: form.fromArea && !isSuggestedLocationValue(form.fromArea) ? "custom" : "suggested",
       to: form.toArea && !isSuggestedLocationValue(form.toArea) ? "custom" : "suggested",
@@ -610,6 +778,83 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
         urgentFeeJpy: rule.urgentFeeJpy,
       },
       rule.id
+    );
+  }
+
+  function closePricingOverrideForm() {
+    setEditingOverrideId(null);
+    setShowOverrideForm(false);
+    setOverrideForm(getBlankOverrideForm());
+    setOverrideRouteMode({ from: "suggested", to: "suggested" });
+    setOverrideFormInitialSnapshot("");
+  }
+
+  function attemptClosePricingOverrideForm() {
+    if (pricingSaving) {
+      return;
+    }
+
+    const currentSnapshot = serializePricingOverrideSnapshot(overrideForm, overrideRouteMode);
+    if (overrideFormInitialSnapshot && currentSnapshot !== overrideFormInitialSnapshot) {
+      const shouldDiscard = window.confirm(
+        `${labels.unsavedChangesTitle}\n\n${labels.unsavedChangesText}`
+      );
+      if (!shouldDiscard) {
+        return;
+      }
+    }
+
+    closePricingOverrideForm();
+  }
+
+  function openPricingOverrideForm(
+    form: PricingOverrideFormState,
+    nextEditingOverrideId: string | null
+  ) {
+    const nextRouteMode = getRouteModeForOverrideForm(form);
+    setEditingOverrideId(nextEditingOverrideId);
+    setOverrideForm(form);
+    setOverrideRouteMode(nextRouteMode);
+    setOverrideFormInitialSnapshot(serializePricingOverrideSnapshot(form, nextRouteMode));
+    setShowOverrideForm(true);
+  }
+
+  function openCreatePricingOverride(prefill?: Partial<PricingOverrideFormState>) {
+    openPricingOverrideForm({ ...getDefaultOverrideForm(), ...prefill }, null);
+  }
+
+  function openCreatePricingOverrideFromRule(rule: PricingRule) {
+    openCreatePricingOverride({
+      fromArea: rule.fromArea,
+      toArea: rule.toArea,
+      tripType: rule.tripType as PricingTripType,
+      vehicleTypeId: rule.vehicleType.id,
+      basePriceJpy: rule.basePriceJpy,
+      nightFeeJpy: rule.nightFeeJpy,
+      urgentFeeJpy: rule.urgentFeeJpy,
+    });
+  }
+
+  function openEditPricingOverride(override: PricingOverride) {
+    const startParts = getJstDateTimeParts(override.startsAt);
+    const endParts = getJstDateTimeParts(override.endsAt);
+    openPricingOverrideForm(
+      {
+        fromArea: override.fromArea,
+        toArea: override.toArea,
+        tripType: override.tripType as PricingTripType,
+        vehicleTypeId: override.vehicleType.id,
+        startDate: startParts.date,
+        startTime: startParts.time,
+        endDate: endParts.date,
+        endTime: endParts.time,
+        basePriceJpy: override.basePriceJpy,
+        nightFeeJpy: override.nightFeeJpy,
+        urgentFeeJpy: override.urgentFeeJpy,
+        note: override.note ?? "",
+        enabled: override.enabled,
+      },
+      override.id
     );
   }
 
@@ -913,6 +1158,31 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     }
   }
 
+  async function loadPricingOverrides(filters = getServerPricingFilters(appliedPricingFilters)) {
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (filters.keyword) params.append("q", filters.keyword);
+      if (filters.fromArea) params.append("fromArea", filters.fromArea);
+      if (filters.toArea) params.append("toArea", filters.toArea);
+      if (filters.tripType) params.append("tripType", filters.tripType);
+      if (filters.vehicleTypeId) params.append("vehicleTypeId", filters.vehicleTypeId);
+
+      const res = await fetch(`/api/admin/pricing-overrides?${params.toString()}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (data?.migrationRequired) {
+        setPricingOverridesMigrationRequired(true);
+        setPricingOverrides([]);
+        return;
+      }
+      if (!res.ok) throw new Error(data?.error ?? labels.loadFailed);
+      setPricingOverridesMigrationRequired(false);
+      setPricingOverrides(sortPricingOverrides(data.overrides ?? []));
+    } catch (e: any) {
+      setError(e?.message ?? labels.loadFailed);
+    }
+  }
+
   async function applyPricingFilters(nextFilters: PricingFilterState = getDraftPricingFilters()) {
     const normalizedFilters: PricingFilterState = {
       keyword: nextFilters.keyword.trim(),
@@ -923,18 +1193,24 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     };
 
     syncPricingFilterInputs(normalizedFilters);
-    await loadPricingRules(getServerPricingFilters(normalizedFilters), {
-      resetPage: true,
-      appliedFilters: normalizedFilters,
-    });
+    await Promise.all([
+      loadPricingRules(getServerPricingFilters(normalizedFilters), {
+        resetPage: true,
+        appliedFilters: normalizedFilters,
+      }),
+      loadPricingOverrides(getServerPricingFilters(normalizedFilters)),
+    ]);
   }
 
   async function resetPricingFilters() {
     syncPricingFilterInputs(EMPTY_PRICING_FILTERS);
-    await loadPricingRules(getServerPricingFilters(EMPTY_PRICING_FILTERS), {
-      resetPage: true,
-      appliedFilters: EMPTY_PRICING_FILTERS,
-    });
+    await Promise.all([
+      loadPricingRules(getServerPricingFilters(EMPTY_PRICING_FILTERS), {
+        resetPage: true,
+        appliedFilters: EMPTY_PRICING_FILTERS,
+      }),
+      loadPricingOverrides(getServerPricingFilters(EMPTY_PRICING_FILTERS)),
+    ]);
   }
 
   async function clearPricingFilterChip(key: keyof PricingFilterState) {
@@ -944,10 +1220,13 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     };
 
     syncPricingFilterInputs(nextFilters);
-    await loadPricingRules(getServerPricingFilters(nextFilters), {
-      resetPage: true,
-      appliedFilters: nextFilters,
-    });
+    await Promise.all([
+      loadPricingRules(getServerPricingFilters(nextFilters), {
+        resetPage: true,
+        appliedFilters: nextFilters,
+      }),
+      loadPricingOverrides(getServerPricingFilters(nextFilters)),
+    ]);
   }
 
   async function savePricingRule() {
@@ -994,6 +1273,90 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     }
   }
 
+  async function savePricingOverride() {
+    setPricingSaving(true);
+    setError(null);
+    try {
+      const startsAt = buildJstIsoString(overrideForm.startDate, overrideForm.startTime);
+      const endsAt = buildJstIsoString(overrideForm.endDate, overrideForm.endTime);
+      if (
+        !overrideForm.fromArea.trim() ||
+        !overrideForm.toArea.trim() ||
+        !overrideForm.tripType ||
+        !overrideForm.vehicleTypeId.trim() ||
+        !startsAt ||
+        !endsAt ||
+        !Number.isFinite(overrideForm.basePriceJpy) ||
+        overrideForm.basePriceJpy < 0
+      ) {
+        throw new Error(labels.overrideFormRequired);
+      }
+
+      if (new Date(startsAt).getTime() >= new Date(endsAt).getTime()) {
+        throw new Error(labels.overrideInvalidPeriod);
+      }
+
+      const method = editingOverrideId ? "PUT" : "POST";
+      const body = {
+        ...(editingOverrideId ? { id: editingOverrideId } : {}),
+        fromArea: overrideForm.fromArea,
+        toArea: overrideForm.toArea,
+        tripType: overrideForm.tripType,
+        vehicleTypeId: overrideForm.vehicleTypeId,
+        startsAt,
+        endsAt,
+        basePriceJpy: overrideForm.basePriceJpy,
+        nightFeeJpy: overrideForm.nightFeeJpy,
+        urgentFeeJpy: overrideForm.urgentFeeJpy,
+        note: overrideForm.note,
+        enabled: overrideForm.enabled,
+      };
+
+      const res = await fetch("/api/admin/pricing-overrides", {
+        method,
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data?.migrationRequired) {
+        setPricingOverridesMigrationRequired(true);
+      }
+      if (!res.ok) throw new Error(data?.error ?? labels.saveFailed);
+      setPricingOverridesMigrationRequired(false);
+
+      await loadPricingOverrides(getServerPricingFilters(appliedPricingFilters));
+      closePricingOverrideForm();
+    } catch (e: any) {
+      setError(e?.message ?? labels.saveFailed);
+    } finally {
+      setPricingSaving(false);
+    }
+  }
+
+  async function deletePricingOverride(id: string) {
+    if (!confirm(labels.deleteConfirmText)) return;
+    setDeletingOverrideId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/pricing-overrides?id=${id}`, {
+        method: "DELETE",
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data?.migrationRequired) {
+        setPricingOverridesMigrationRequired(true);
+      }
+      if (!res.ok) throw new Error(data?.error ?? labels.deleteFailed);
+      setPricingOverridesMigrationRequired(false);
+      await loadPricingOverrides(getServerPricingFilters(appliedPricingFilters));
+    } catch (e: any) {
+      setError(e?.message ?? labels.deleteFailed);
+    } finally {
+      setDeletingOverrideId(null);
+    }
+  }
+
   useEffect(() => {
     if (token && activeTab === "pricing") {
       syncPricingFilterInputs(appliedPricingFilters);
@@ -1003,6 +1366,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
           resetPage: true,
           appliedFilters: appliedPricingFilters,
         }),
+        loadPricingOverrides(getServerPricingFilters(appliedPricingFilters)),
       ]);
     }
   }, [activeTab, token]);
@@ -1087,6 +1451,9 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
         if (showRuleForm) {
           attemptClosePricingRuleForm();
         }
+        if (showOverrideForm) {
+          attemptClosePricingOverrideForm();
+        }
         if (showImportModal) {
           setShowImportModal(false);
         }
@@ -1097,7 +1464,19 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [editingRow, showImportModal, showRuleForm, ruleForm, routeMode, ruleFormInitialSnapshot, pricingSaving]);
+  }, [
+    editingRow,
+    showImportModal,
+    showOverrideForm,
+    showRuleForm,
+    ruleForm,
+    routeMode,
+    ruleFormInitialSnapshot,
+    overrideForm,
+    overrideRouteMode,
+    overrideFormInitialSnapshot,
+    pricingSaving,
+  ]);
 
   async function handleLogin() {
     const trimmedToken = token.trim();
@@ -1124,6 +1503,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
               resetPage: true,
               appliedFilters: appliedPricingFilters,
             }),
+            loadPricingOverrides(getServerPricingFilters(appliedPricingFilters)),
           ]);
         }
       } else {
@@ -1707,6 +2087,14 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                                     </div>
                                   </div>
                                   <div>
+                                    <div className="text-xs text-slate-500">{labels.refundFeeDeducted}</div>
+                                    <div className="font-medium text-slate-900">
+                                      {r.refundFeeDeductedJpy != null
+                                        ? formatMoneyFromJpy(r.refundFeeDeductedJpy, currency, locale)
+                                        : labels.notProvided}
+                                    </div>
+                                  </div>
+                                  <div>
                                     <div className="text-xs text-slate-500">{labels.refundRequestedAt}</div>
                                     <div className="font-medium text-slate-900">
                                       {r.refundRequestedAt ? formatDateTimeJST(r.refundRequestedAt, locale) : labels.notProvided}
@@ -2043,6 +2431,14 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                     >
                       {labels.addRule}
                     </button>
+
+                    <button
+                      onClick={() => openCreatePricingOverride()}
+                      disabled={pricingLoading || importLoading || pricingSaving}
+                      className={pricingToolbarPrimaryButtonClass}
+                    >
+                      {labels.addOverride}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2077,7 +2473,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                         <th className="w-[130px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.basePrice}</th>
                         <th className="w-[130px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.nightFee}</th>
                         <th className="w-[130px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.urgentFee}</th>
-                        <th className="w-[170px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.action}</th>
+                        <th className="w-[260px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.action}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -2123,6 +2519,13 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                             </td>
                             <td className="px-5 py-5 align-top">
                               <div className="flex flex-nowrap justify-end gap-2.5 whitespace-nowrap">
+                                <button
+                                  className="whitespace-nowrap rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
+                                  onClick={() => openCreatePricingOverrideFromRule(rule)}
+                                  disabled={pricingSaving || deletingRuleId !== null}
+                                >
+                                  {labels.specialPeriod}
+                                </button>
                                 <button
                                   className="whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
                                   onClick={() => openEditPricingRule(rule)}
@@ -2189,6 +2592,139 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+
+          <div className="rounded-[30px] border border-amber-100 bg-white p-5 shadow-[0_28px_80px_-48px_rgba(146,64,14,0.28)] sm:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-lg font-semibold text-slate-900">{labels.pricingOverrides}</div>
+                <div className="mt-1 text-sm text-slate-600">{labels.pricingOverridesSubtitle}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => openCreatePricingOverride()}
+                disabled={pricingLoading || pricingSaving || pricingOverridesMigrationRequired}
+                className={pricingToolbarPrimaryButtonClass}
+              >
+                {labels.addOverride}
+              </button>
+            </div>
+
+            {pricingOverridesMigrationRequired ? (
+              <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+                <div className="font-semibold">{labels.pricingOverridesMigrationRequired}</div>
+                <div className="mt-1 text-xs font-medium text-amber-800">
+                  {labels.pricingOverridesMigrationCommand}:{" "}
+                  <code className="rounded-md bg-white/80 px-1.5 py-0.5 text-amber-900">
+                    npm run patch:pricing-overrides
+                  </code>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mt-5 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_70px_-46px_rgba(15,23,42,0.25)]">
+              <div className="overflow-x-auto">
+                <table className="min-w-[1320px] w-full text-sm">
+                  <thead className="bg-amber-50/70 text-left text-slate-500">
+                    <tr className="border-b border-slate-200">
+                      <th className="w-[280px] px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.route}</th>
+                      <th className="w-[130px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.tripType}</th>
+                      <th className="w-[170px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.vehicleType}</th>
+                      <th className="w-[260px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.specialPeriod}</th>
+                      <th className="w-[120px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.basePrice}</th>
+                      <th className="w-[120px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.nightFee}</th>
+                      <th className="w-[120px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.urgentFee}</th>
+                      <th className="w-[120px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.overrideEnabled}</th>
+                      <th className="w-[190px] px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.overrideNote}</th>
+                      <th className="w-[170px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.action}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {pricingOverrides.length === 0 ? (
+                      <tr>
+                        <td className="px-5 py-14 text-center text-slate-500" colSpan={10}>
+                          {pricingLoading
+                            ? labels.loading
+                            : pricingOverridesMigrationRequired
+                              ? labels.pricingOverridesMigrationRequired
+                              : labels.noOverrides}
+                        </td>
+                      </tr>
+                    ) : (
+                      pricingOverrides.map((override) => (
+                        <tr key={override.id} className="align-middle transition hover:bg-amber-50/35">
+                          <td className="px-5 py-5">
+                            <div className="font-semibold leading-6 text-slate-900">
+                              {getPricingDisplayValue(override.fromArea)} {"->"} {getPricingDisplayValue(override.toArea)}
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-slate-500">
+                              {override.fromArea} {"->"} {override.toArea}
+                            </div>
+                          </td>
+                          <td className="px-5 py-5 align-top">
+                            <span className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
+                              {getTripTypeLabel(override.tripType)}
+                            </span>
+                          </td>
+                          <td className="px-5 py-5 align-top">
+                            <span className="inline-flex whitespace-nowrap rounded-full border border-brand-100 bg-brand-50/80 px-2.5 py-1 text-xs font-medium text-brand-700">
+                              {labels.vehicles[override.vehicleType.name] || override.vehicleType.name}
+                            </span>
+                          </td>
+                          <td className="px-5 py-5 align-top text-slate-700">
+                            <div className="font-medium">{formatDateTimeJST(override.startsAt, locale)}</div>
+                            <div className="mt-1 text-xs text-slate-500">→ {formatDateTimeJST(override.endsAt, locale)}</div>
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                            {formatMoneyFromJpy(override.basePriceJpy, currency, locale)}
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                            {formatMoneyFromJpy(override.nightFeeJpy, currency, locale)}
+                          </td>
+                          <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                            {formatMoneyFromJpy(override.urgentFeeJpy, currency, locale)}
+                          </td>
+                          <td className="px-5 py-5 align-top">
+                            <span
+                              className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                override.enabled
+                                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border border-slate-200 bg-slate-50 text-slate-500"
+                              }`}
+                            >
+                              {override.enabled ? labels.enabled : labels.disabled}
+                            </span>
+                          </td>
+                          <td className="px-5 py-5 align-top text-slate-600">
+                            <div className="max-w-[180px] truncate" title={override.note ?? labels.notProvided}>
+                              {override.note || labels.notProvided}
+                            </div>
+                          </td>
+                          <td className="px-5 py-5 align-top">
+                            <div className="flex flex-nowrap justify-end gap-2.5 whitespace-nowrap">
+                              <button
+                                className="whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
+                                onClick={() => openEditPricingOverride(override)}
+                                disabled={pricingSaving || deletingOverrideId !== null}
+                              >
+                                {labels.edit}
+                              </button>
+                              <button
+                                className="whitespace-nowrap rounded-xl border border-rose-200 px-3.5 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+                                onClick={() => void deletePricingOverride(override.id)}
+                                disabled={pricingSaving || deletingOverrideId !== null}
+                              >
+                                {deletingOverrideId === override.id ? labels.deleting : labels.delete}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -2450,6 +2986,263 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                         ? labels.updating
                         : labels.creating
                       : editingRuleId
+                        ? labels.update
+                        : labels.create}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {showOverrideForm ? (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  attemptClosePricingOverrideForm();
+                }
+              }}
+            >
+              <div
+                className="w-full max-w-4xl overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_36px_120px_-56px_rgba(15,23,42,0.45)]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="border-b border-slate-200 bg-gradient-to-r from-amber-50/80 to-brand-50/40 px-6 py-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-lg font-semibold text-slate-900">
+                        {editingOverrideId ? labels.editOverride : labels.addOverride}
+                      </div>
+                      <div className="mt-1 text-sm text-slate-500">{labels.pricingOverridesSubtitle}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={attemptClosePricingOverrideForm}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
+                      aria-label={labels.close}
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-[calc(92vh-92px)] overflow-y-auto px-6 py-6">
+                  <datalist id="pricing-location-options">
+                    {pricingLocationOptions.map((option) => (
+                      <option key={`override-location-${option.value}`} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </datalist>
+
+                  <div className="space-y-5">
+                    <section className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="mb-4 text-sm font-semibold text-slate-900">{labels.routeSectionTitle}</div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.fromArea}</div>
+                          <input
+                            list="pricing-location-options"
+                            className={pricingFilterFieldClass}
+                            value={overrideForm.fromArea}
+                            onChange={(e) => setOverrideForm((prev) => ({ ...prev, fromArea: e.target.value }))}
+                            placeholder={labels.fromAreaPlaceholder}
+                            required
+                          />
+                        </label>
+
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.toArea}</div>
+                          <input
+                            list="pricing-location-options"
+                            className={pricingFilterFieldClass}
+                            value={overrideForm.toArea}
+                            onChange={(e) => setOverrideForm((prev) => ({ ...prev, toArea: e.target.value }))}
+                            placeholder={labels.toAreaPlaceholder}
+                            required
+                          />
+                        </label>
+                      </div>
+                    </section>
+
+                    <section className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="mb-4 text-sm font-semibold text-slate-900">{labels.tripVehicleSection}</div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.tripType}</div>
+                          <select
+                            className={pricingFilterFieldClass}
+                            value={overrideForm.tripType}
+                            onChange={(e) =>
+                              setOverrideForm((prev) => ({ ...prev, tripType: e.target.value as PricingTripType }))
+                            }
+                          >
+                            <option value="PICKUP">{labels.tripTypes.PICKUP}</option>
+                            <option value="DROPOFF">{labels.tripTypes.DROPOFF}</option>
+                            <option value="POINT_TO_POINT">{labels.tripTypes.POINT_TO_POINT}</option>
+                          </select>
+                        </label>
+
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.vehicleType}</div>
+                          <select
+                            className={pricingFilterFieldClass}
+                            value={overrideForm.vehicleTypeId}
+                            onChange={(e) => setOverrideForm((prev) => ({ ...prev, vehicleTypeId: e.target.value }))}
+                            required
+                          >
+                            <option value="">{labels.selectVehicle}</option>
+                            {vehicleTypes.map((vehicle) => (
+                              <option key={`override-vehicle-${vehicle.id}`} value={vehicle.id}>
+                                {labels.vehicles[vehicle.name] || vehicle.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                    </section>
+
+                    <section className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="mb-4 text-sm font-semibold text-slate-900">{labels.specialPeriod}</div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.overrideStartAt}</div>
+                          <div className="flex min-w-0 gap-2">
+                            <LocalizedDatePicker
+                              className="flex-[1.5] min-w-[140px]"
+                              buttonClassName="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition focus:outline-none focus:ring-4 focus:ring-brand-100"
+                              value={overrideForm.startDate}
+                              onChange={(value) => setOverrideForm((prev) => ({ ...prev, startDate: value }))}
+                              locale={locale}
+                              ariaLabel={labels.overrideStartAt}
+                            />
+                            <input
+                              type="time"
+                              className="min-w-[112px] flex-1 appearance-none rounded-2xl border border-slate-200 bg-white py-3 pl-4 pr-8 text-sm shadow-sm transition focus:outline-none focus:ring-4 focus:ring-brand-100"
+                              value={overrideForm.startTime}
+                              onChange={(e) => setOverrideForm((prev) => ({ ...prev, startTime: e.target.value }))}
+                              lang={dateTimeLocale}
+                              required
+                            />
+                          </div>
+                        </label>
+
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.overrideEndAt}</div>
+                          <div className="flex min-w-0 gap-2">
+                            <LocalizedDatePicker
+                              className="flex-[1.5] min-w-[140px]"
+                              buttonClassName="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition focus:outline-none focus:ring-4 focus:ring-brand-100"
+                              value={overrideForm.endDate}
+                              onChange={(value) => setOverrideForm((prev) => ({ ...prev, endDate: value }))}
+                              locale={locale}
+                              ariaLabel={labels.overrideEndAt}
+                              minDate={overrideForm.startDate}
+                            />
+                            <input
+                              type="time"
+                              className="min-w-[112px] flex-1 appearance-none rounded-2xl border border-slate-200 bg-white py-3 pl-4 pr-8 text-sm shadow-sm transition focus:outline-none focus:ring-4 focus:ring-brand-100"
+                              value={overrideForm.endTime}
+                              onChange={(e) => setOverrideForm((prev) => ({ ...prev, endTime: e.target.value }))}
+                              lang={dateTimeLocale}
+                              required
+                            />
+                          </div>
+                        </label>
+                      </div>
+                    </section>
+
+                    <section className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="mb-4 text-sm font-semibold text-slate-900">{labels.pricingSectionTitle}</div>
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.basePrice}</div>
+                          <input
+                            type="number"
+                            className={pricingFilterFieldClass}
+                            value={overrideForm.basePriceJpy}
+                            onChange={(e) =>
+                              setOverrideForm((prev) => ({ ...prev, basePriceJpy: Number(e.target.value || 0) }))
+                            }
+                            min={0}
+                            required
+                          />
+                        </label>
+
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.nightFee}</div>
+                          <input
+                            type="number"
+                            className={pricingFilterFieldClass}
+                            value={overrideForm.nightFeeJpy}
+                            onChange={(e) =>
+                              setOverrideForm((prev) => ({ ...prev, nightFeeJpy: Number(e.target.value || 0) }))
+                            }
+                            min={0}
+                          />
+                        </label>
+
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.urgentFee}</div>
+                          <input
+                            type="number"
+                            className={pricingFilterFieldClass}
+                            value={overrideForm.urgentFeeJpy}
+                            onChange={(e) =>
+                              setOverrideForm((prev) => ({ ...prev, urgentFeeJpy: Number(e.target.value || 0) }))
+                            }
+                            min={0}
+                          />
+                        </label>
+                      </div>
+                    </section>
+
+                    <section className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-5">
+                      <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+                        <label className="block text-sm">
+                          <div className="mb-2 font-medium text-slate-700">{labels.overrideNote}</div>
+                          <textarea
+                            className="min-h-[96px] w-full resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:ring-4 focus:ring-brand-100"
+                            value={overrideForm.note}
+                            onChange={(e) => setOverrideForm((prev) => ({ ...prev, note: e.target.value }))}
+                            placeholder={labels.overrideNotePlaceholder}
+                          />
+                        </label>
+
+                        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                            checked={overrideForm.enabled}
+                            onChange={(e) => setOverrideForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+                          />
+                          {labels.overrideEnabled}
+                        </label>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+
+                <div className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-white px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+                  <button
+                    className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                    disabled={pricingSaving}
+                    onClick={attemptClosePricingOverrideForm}
+                  >
+                    {labels.cancel}
+                  </button>
+                  <button
+                    className="rounded-2xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-100 transition hover:bg-brand-700 disabled:opacity-60"
+                    disabled={pricingSaving}
+                    onClick={() => void savePricingOverride()}
+                  >
+                    {pricingSaving
+                      ? editingOverrideId
+                        ? labels.updating
+                        : labels.creating
+                      : editingOverrideId
                         ? labels.update
                         : labels.create}
                   </button>

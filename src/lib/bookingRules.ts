@@ -22,7 +22,12 @@ export function canUserCancel(now: Date, pickupTime: Date, isUrgent: boolean) {
 }
 
 export function computeNightFee(pickupTime: Date) {
-  // MVP：时间 22:00-06:00 收取夜间附加费（这里简化使用本地小时数）
-  const h = pickupTime.getHours();
+  const h = Number(
+    new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      hourCycle: "h23",
+      timeZone: JAPAN_TZ,
+    }).format(pickupTime)
+  );
   return h >= 22 || h < 6;
 }

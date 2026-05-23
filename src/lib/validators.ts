@@ -71,6 +71,11 @@ export const CancelBookingSchema = z.object({
   reason: z.string().min(2).max(200)
 });
 
+export const RefundPreviewSchema = z.object({
+  bookingId: z.string().min(5),
+  contactEmail: z.string().email()
+});
+
 export const AdminUpdateBookingSchema = z.object({
   bookingId: z.string().min(5),
   status: z
@@ -88,6 +93,39 @@ export const AdminPricingRuleSchema = z.object({
   basePriceJpy: z.coerce.number().int().min(0).max(1000000),
   nightFeeJpy: z.coerce.number().int().min(0).max(100000).optional(),
   urgentFeeJpy: z.coerce.number().int().min(0).max(100000).optional()
+});
+
+const DateTimeStringSchema = z.string().min(1).refine((value) => {
+  const date = new Date(value);
+  return !Number.isNaN(date.getTime());
+}, {
+  message: "Invalid datetime",
+});
+
+const AdminPricingOverrideBaseSchema = z.object({
+  fromArea: z.string().min(1),
+  toArea: z.string().min(1),
+  tripType: z.enum(["PICKUP", "DROPOFF", "POINT_TO_POINT"]),
+  vehicleTypeId: z.string().min(1),
+  startsAt: DateTimeStringSchema,
+  endsAt: DateTimeStringSchema,
+  basePriceJpy: z.coerce.number().int().min(0).max(1000000),
+  nightFeeJpy: z.coerce.number().int().min(0).max(100000).optional(),
+  urgentFeeJpy: z.coerce.number().int().min(0).max(100000).optional(),
+  note: z.string().max(500).optional().nullable(),
+  enabled: z.boolean().optional(),
+});
+
+export const AdminPricingOverrideSchema = AdminPricingOverrideBaseSchema.refine((data) => new Date(data.endsAt).getTime() > new Date(data.startsAt).getTime(), {
+  message: "End datetime must be after start datetime",
+  path: ["endsAt"],
+});
+
+export const AdminPricingOverrideUpdateSchema = AdminPricingOverrideBaseSchema.extend({
+  id: z.string().min(1),
+}).refine((data) => new Date(data.endsAt).getTime() > new Date(data.startsAt).getTime(), {
+  message: "End datetime must be after start datetime",
+  path: ["endsAt"],
 });
 
 export const AdminPricingImportRowSchema = z.object({

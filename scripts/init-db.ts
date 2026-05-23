@@ -13,6 +13,7 @@ const TABLE_NAMES = [
   "orders",
   "vehicle_types",
   "pricing_rules",
+  "pricing_rule_overrides",
   "bookings",
   "users",
   "user_emails",
