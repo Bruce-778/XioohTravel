@@ -11,6 +11,7 @@ import {
   type PopularArea,
   type PopularHotel
 } from "@/lib/locationData";
+import { loadGoogleMaps, logGoogleMapsDiagnostic } from "@/lib/googleMapsClient";
 
 type LocationSelectorProps = {
   value: string;
@@ -32,12 +33,15 @@ type LocationSelectorProps = {
 // 真实 Google Places Autocomplete 搜索逻辑
 const searchGooglePlaces = async (query: string): Promise<any[]> => {
   if (query.length < 2) return [];
-  
-  const g = (window as any).google;
-  // 检查 Google Maps 是否已加载
-  if (typeof window === 'undefined' || !g || !g.maps || !g.maps.places) {
-    console.warn("Google Maps API not loaded");
-    // 回退到模拟数据，方便演示
+
+  let g: any;
+  try {
+    g = await loadGoogleMaps(["places"]);
+  } catch (error) {
+    logGoogleMapsDiagnostic("Places Autocomplete is unavailable; using local fallback results", {
+      message: error instanceof Error ? error.message : String(error),
+      query,
+    });
     return [
       { text: `${query} Station`, subtitle: "Railway Station, Japan", type: "google" },
       { text: `Hotel ${query}`, subtitle: "Hotel, Japan", type: "google" },
@@ -84,47 +88,34 @@ export function LocationSelector({
 }: LocationSelectorProps) {
   // 加载 Google Maps 脚本
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    
-    if (!apiKey || !apiKey.startsWith("AIza")) {
-      console.warn("Invalid or missing Google Maps API Key in .env");
-      setApiError(true);
-      return;
+    let isActive = true;
+
+    if (isAirport) {
+      setApiError(false);
+      return () => {
+        isActive = false;
+      };
     }
 
-    // 如果已经存在 google 对象，说明已加载成功
-    if ((window as any).google?.maps?.places) return;
+    loadGoogleMaps(["places"])
+      .then(() => {
+        if (isActive) {
+          setApiError(false);
+        }
+      })
+      .catch((error) => {
+        logGoogleMapsDiagnostic("Places Autocomplete failed to initialize", {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        if (isActive) {
+          setApiError(true);
+        }
+      });
 
-    // 检查是否已经有正在加载的脚本
-    if ((window as any).__googleMapsLoading) return;
-    const existingScript = document.getElementById("google-maps-script");
-    if (existingScript) return;
-
-    // 标记正在加载，防止多个组件同时触发
-    (window as any).__googleMapsLoading = true;
-
-    // 监听认证失败
-    (window as any).gm_authFailure = () => {
-      console.error("Google Maps authentication failed (InvalidKeyMapError)");
-      setApiError(true);
-      (window as any).__googleMapsLoading = false;
+    return () => {
+      isActive = false;
     };
-
-    const script = document.createElement("script");
-    script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-      (window as any).__googleMapsLoading = false;
-    };
-    script.onerror = () => {
-      console.error("Failed to load Google Maps script");
-      setApiError(true);
-      (window as any).__googleMapsLoading = false;
-    };
-    document.head.appendChild(script);
-  }, []);
+  }, [isAirport]);
 
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");

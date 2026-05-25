@@ -19,6 +19,7 @@ import {
   normalizeFlightNumber,
   normalizeFlightNumberInput,
 } from "@/lib/flightNumber";
+import { loadGoogleMaps, logGoogleMapsDiagnostic } from "@/lib/googleMapsClient";
 
 type Preset = {
   tripType: "PICKUP" | "DROPOFF" | "POINT_TO_POINT";
@@ -176,16 +177,17 @@ function ItineraryTimeline({
   pickupLocation,
   dropoffTime,
   dropoffLocation,
-  estimate,
+  estimateState,
   labels,
 }: {
   pickupTime: string;
   pickupLocation: string;
   dropoffTime: string;
   dropoffLocation: string;
-  estimate: RouteEstimate | null;
+  estimateState: RouteEstimateState;
   labels: Pick<Labels, "aboutDuration" | "approxDistance" | "dropoffLocation">;
 }) {
+  const estimate = estimateState.status === "success" ? estimateState.estimate : null;
   const estimateText = estimate
     ? `${formatTemplate(labels.aboutDuration, { duration: estimate.durationText })} · ${formatTemplate(
         labels.approxDistance,
@@ -209,7 +211,7 @@ function ItineraryTimeline({
         {estimateText ? (
           <div className="text-xs font-semibold leading-5 text-slate-700">{estimateText}</div>
         ) : (
-          <div className="h-1" />
+          <div className="h-5" aria-hidden="true" />
         )}
       </div>
 
@@ -291,7 +293,11 @@ type RouteEstimate = {
   durationSeconds: number;
 };
 
-let googleMapsRouteLoadPromise: Promise<any> | null = null;
+type RouteEstimateState =
+  | { status: "idle"; estimate: null; error: null }
+  | { status: "loading"; estimate: null; error: null }
+  | { status: "success"; estimate: RouteEstimate; error: null }
+  | { status: "error"; estimate: null; error: string };
 
 function parseJstDateTime(value: string) {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
@@ -337,72 +343,6 @@ function getRouteEstimateAddress(value: string) {
     : `${value}, Japan`;
 }
 
-function loadGoogleMapsForRouteEstimate() {
-  if (typeof window === "undefined") {
-    return Promise.reject(new Error("Google Maps is unavailable on the server"));
-  }
-
-  const loadedGoogle = (window as any).google;
-  if (loadedGoogle?.maps?.DistanceMatrixService) {
-    return Promise.resolve(loadedGoogle);
-  }
-
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  if (!apiKey || !apiKey.startsWith("AIza")) {
-    return Promise.reject(new Error("Google Maps API key is not configured"));
-  }
-
-  if (!googleMapsRouteLoadPromise) {
-    googleMapsRouteLoadPromise = new Promise((resolve, reject) => {
-      const complete = () => {
-        const google = (window as any).google;
-        if (google?.maps?.DistanceMatrixService) {
-          resolve(google);
-        } else {
-          reject(new Error("Google Maps failed to load"));
-        }
-      };
-
-      const existingScript = document.getElementById("google-maps-script");
-      if (existingScript) {
-        existingScript.addEventListener("load", complete, { once: true });
-        existingScript.addEventListener(
-          "error",
-          () => reject(new Error("Google Maps script failed to load")),
-          { once: true }
-        );
-
-        const startedAt = Date.now();
-        const interval = window.setInterval(() => {
-          const google = (window as any).google;
-          if (google?.maps?.DistanceMatrixService) {
-            window.clearInterval(interval);
-            resolve(google);
-          } else if (Date.now() - startedAt > 10000) {
-            window.clearInterval(interval);
-            reject(new Error("Google Maps timed out"));
-          }
-        }, 100);
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.id = "google-maps-script";
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      script.onload = complete;
-      script.onerror = () => reject(new Error("Google Maps script failed to load"));
-      document.head.appendChild(script);
-    }).catch((error) => {
-      googleMapsRouteLoadPromise = null;
-      throw error;
-    });
-  }
-
-  return googleMapsRouteLoadPromise;
-}
-
 function requestRouteEstimate({
   pickupLocation,
   dropoffLocation,
@@ -412,9 +352,9 @@ function requestRouteEstimate({
   dropoffLocation: string;
   locale: string;
 }) {
-  return loadGoogleMapsForRouteEstimate().then(
+  return loadGoogleMaps(["distanceMatrix"]).then(
     (google) =>
-      new Promise<RouteEstimate | null>((resolve) => {
+      new Promise<RouteEstimate>((resolve, reject) => {
         const service = new google.maps.DistanceMatrixService();
         service.getDistanceMatrix(
           {
@@ -426,14 +366,27 @@ function requestRouteEstimate({
             language: locale.startsWith("zh") ? "zh-CN" : "en",
           },
           (response: any, status: string) => {
-            if (status !== google.maps.DistanceMatrixStatus.OK) {
-              resolve(null);
+            const okStatus = google.maps.DistanceMatrixStatus?.OK ?? "OK";
+            if (status !== okStatus) {
+              logGoogleMapsDiagnostic("Distance Matrix returned a non-OK status", {
+                status,
+                pickupLocation,
+                dropoffLocation,
+              });
+              reject(new Error(`Distance Matrix status: ${status}`));
               return;
             }
 
             const element = response?.rows?.[0]?.elements?.[0];
-            if (element?.status !== "OK" || !element.duration || !element.distance) {
-              resolve(null);
+            if (element?.status !== "OK" || !element?.duration || !element?.distance) {
+              logGoogleMapsDiagnostic("Distance Matrix result is missing route distance or duration", {
+                elementStatus: element?.status,
+                hasDuration: Boolean(element?.duration),
+                hasDistance: Boolean(element?.distance),
+                pickupLocation,
+                dropoffLocation,
+              });
+              reject(new Error(`Distance Matrix element status: ${element?.status ?? "missing"}`));
               return;
             }
 
@@ -479,7 +432,11 @@ export function CheckoutForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPaymentCancelledReturn, setIsPaymentCancelledReturn] = useState(false);
-  const [routeEstimate, setRouteEstimate] = useState<RouteEstimate | null>(null);
+  const [routeEstimateState, setRouteEstimateState] = useState<RouteEstimateState>({
+    status: "idle",
+    estimate: null,
+    error: null,
+  });
   const phoneFieldRef = useRef<HTMLDivElement>(null);
   const phoneLocalInputRef = useRef<HTMLInputElement>(null);
 
@@ -574,22 +531,32 @@ export function CheckoutForm({
   useEffect(() => {
     let isActive = true;
 
-    setRouteEstimate(null);
     if (!pickupLocation || !dropoffLocation) {
+      setRouteEstimateState({ status: "idle", estimate: null, error: null });
       return () => {
         isActive = false;
       };
     }
 
+    setRouteEstimateState({ status: "loading", estimate: null, error: null });
     requestRouteEstimate({ pickupLocation, dropoffLocation, locale })
       .then((estimate) => {
         if (isActive) {
-          setRouteEstimate(estimate);
+          setRouteEstimateState({ status: "success", estimate, error: null });
         }
       })
-      .catch(() => {
+      .catch((error) => {
+        logGoogleMapsDiagnostic("Route estimate request failed", {
+          message: error instanceof Error ? error.message : String(error),
+          pickupLocation,
+          dropoffLocation,
+        });
         if (isActive) {
-          setRouteEstimate(null);
+          setRouteEstimateState({
+            status: "error",
+            estimate: null,
+            error: error instanceof Error ? error.message : "Route estimate failed",
+          });
         }
       });
 
@@ -609,10 +576,10 @@ export function CheckoutForm({
   const pickupDate = useMemo(() => parseJstDateTime(preset.pickupTime), [preset.pickupTime]);
   const arrivalDate = useMemo(
     () =>
-      routeEstimate
-        ? new Date(pickupDate.getTime() + routeEstimate.durationSeconds * 1000)
+      routeEstimateState.status === "success"
+        ? new Date(pickupDate.getTime() + routeEstimateState.estimate.durationSeconds * 1000)
         : null,
-    [pickupDate, routeEstimate]
+    [pickupDate, routeEstimateState]
   );
   const timelinePickupTime = useMemo(
     () => formatTimelineDateTime(pickupDate, locale),
@@ -1037,7 +1004,7 @@ export function CheckoutForm({
                 pickupLocation={pickupLocation}
                 dropoffTime={timelineDropoffTime}
                 dropoffLocation={dropoffLocation}
-                estimate={routeEstimate}
+                estimateState={routeEstimateState}
                 labels={labels}
               />
               <div className="space-y-3 border-t border-slate-100 pt-4">
