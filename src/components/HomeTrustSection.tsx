@@ -3,7 +3,7 @@ import { getT } from "@/lib/i18n";
 
 function ServiceIcon({ children }: { children: React.ReactNode }) {
   return (
-    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-brand-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-brand-200/60">
+    <div className="h-12 w-12 shrink-0 flex-none rounded-2xl bg-gradient-to-br from-brand-500 to-blue-600 text-white flex items-center justify-center shadow-md shadow-brand-200/60">
       {children}
     </div>
   );
@@ -29,10 +29,11 @@ export async function HomeTrustSection() {
       title: t("home.service.item.attire.title"),
       desc: t("home.service.item.attire.desc"),
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 11a4 4 0 100-8 4 4 0 000 8z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 21a7 7 0 0114 0" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.5 14l1.5 2 1.5-2M12 16v4" />
+        <svg className="h-6 w-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 10.5a3.25 3.25 0 100-6.5 3.25 3.25 0 000 6.5z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5.5 20.25a6.5 6.5 0 0113 0" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.25 13.5L12 16l1.75-2.5M12 16v4" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8.5 14.75l-1.25 3M15.5 14.75l1.25 3" />
         </svg>
       ),
     },
@@ -40,8 +41,11 @@ export async function HomeTrustSection() {
       title: t("home.service.item.sign.title"),
       desc: t("home.service.item.sign.desc"),
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 21V5m0 0l10 2-3 4 3 4-10-2" />
+        <svg className="h-6 w-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6 6.75h12a1.5 1.5 0 011.5 1.5v6.25A1.5 1.5 0 0118 16H6a1.5 1.5 0 01-1.5-1.5V8.25A1.5 1.5 0 016 6.75z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10.5h8M8 13h5" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 16v2.5M16 16v2.5" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 4.75h6" />
         </svg>
       ),
     },
@@ -49,8 +53,11 @@ export async function HomeTrustSection() {
       title: t("home.service.item.flight.title"),
       desc: t("home.service.item.flight.desc"),
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M2.5 19l19-7-19-7 5 7-5 7zm5-7h14" />
+        <svg className="h-6 w-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 18l18-6L3 6l4.5 6L3 18z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7.5 12H21" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5.5 21.25c2.25.7 4.4.55 6.5-.45" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M14.75 19.25h.01" />
         </svg>
       ),
     },
@@ -58,8 +65,12 @@ export async function HomeTrustSection() {
       title: t("home.service.item.cancel.title"),
       desc: t("home.service.item.cancel.desc"),
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <svg className="h-6 w-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 5.25a6.75 6.75 0 106.2 9.43" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8.25v4l2.25 1.5" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.25 4.75h3v3" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20.25 4.75l-4.75 4.75" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16.25 18.25l1.35 1.35 3.15-3.35" />
         </svg>
       ),
     },
@@ -67,8 +78,12 @@ export async function HomeTrustSection() {
       title: t("home.service.item.luggage.title"),
       desc: t("home.service.item.luggage.desc"),
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2m-9 2h12a1 1 0 011 1v9a2 2 0 01-2 2H7a2 2 0 01-2-2V9a1 1 0 011-1z" />
+        <svg className="h-6 w-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 7V5.25A1.25 1.25 0 0110.25 4h3.5A1.25 1.25 0 0115 5.25V7" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 7h10a1.5 1.5 0 011.5 1.5v8A2.5 2.5 0 0116 19H8a2.5 2.5 0 01-2.5-2.5v-8A1.5 1.5 0 017 7z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 10.5v5M15 10.5v5" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8.5 20.25h.01M15.5 20.25h.01" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M18.25 10.75l1 1 2.25-2.5" />
         </svg>
       ),
     },
@@ -76,10 +91,11 @@ export async function HomeTrustSection() {
       title: t("home.service.item.language.title"),
       desc: t("home.service.item.language.desc"),
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h10a3 3 0 013 3v3a3 3 0 01-3 3H9l-5 4V8a3 3 0 013-3z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 10h2a3 3 0 013 3v6l-3-2h-4a3 3 0 01-3-3" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 9h5M10.5 7v2m0 0a7.5 7.5 0 01-2 4M10.5 9a7.5 7.5 0 002 4" />
+        <svg className="h-6 w-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4.5 5.5h9a2.5 2.5 0 012.5 2.5v3a2.5 2.5 0 01-2.5 2.5H9l-4.5 3.25V8A2.5 2.5 0 017 5.5z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 10.5h2.5A2.5 2.5 0 0120 13v5.75l-3.25-2.25H13.5A2.5 2.5 0 0111 14" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10.75l1.25-3 1.25 3M8.35 10h1.8" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M14.5 13.5h3" />
         </svg>
       ),
     },
@@ -255,7 +271,7 @@ export async function HomeTrustSection() {
                   >
                     <div className="flex items-start gap-4">
                       <ServiceIcon>{item.icon}</ServiceIcon>
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="text-lg font-bold text-slate-900">{item.title}</h3>
                         <p className="mt-2 text-sm leading-6 text-slate-600">{item.desc}</p>
                       </div>
