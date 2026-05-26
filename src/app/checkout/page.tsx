@@ -7,8 +7,13 @@ import { formatDateTimeJST, parseJstDateTime } from "@/lib/timeFormat";
 import { getCurrency } from "@/lib/currency";
 import { getT, getLocale } from "@/lib/i18n";
 import { z } from "zod";
-import { getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
+import { VEHICLE_NAMES } from "@/lib/locationData";
 import { getEffectivePricingRule } from "@/lib/effectivePricing";
+import {
+  appendOptionalAddressParams,
+  getDisplayLocation,
+  getOptionalStringParam,
+} from "@/lib/locationDisplay";
 
 export default async function CheckoutPage({
   searchParams
@@ -53,7 +58,11 @@ export default async function CheckoutPage({
   }
 
   const q = parsed.data;
-  const vehiclesBackUrl = `/vehicles?${new URLSearchParams({
+  const addressParams = {
+    fromAddress: getOptionalStringParam(params, "fromAddress"),
+    toAddress: getOptionalStringParam(params, "toAddress"),
+  };
+  const vehiclesBackParams = appendOptionalAddressParams(new URLSearchParams({
     tripType: q.tripType,
     fromArea: q.fromArea,
     toArea: q.toArea,
@@ -63,7 +72,8 @@ export default async function CheckoutPage({
     luggageSmall: String(q.luggageSmall),
     luggageMedium: String(q.luggageMedium),
     luggageLarge: String(q.luggageLarge),
-  }).toString()}`;
+  }), addressParams);
+  const vehiclesBackUrl = `/vehicles?${vehiclesBackParams.toString()}`;
   const pickupTime = parseJstDateTime(q.pickupTime);
   const now = new Date();
   const isUrgent = isUrgentOrder(now, pickupTime);
@@ -121,8 +131,8 @@ export default async function CheckoutPage({
   const base = rule.basePriceJpy;
   const night = isNight ? rule.nightFeeJpy : 0;
   const urgent = isUrgent ? rule.urgentFeeJpy : 0;
-  const defaultPickupLocation = getLocalizedLocation(q.fromArea, locale);
-  const defaultDropoffLocation = getLocalizedLocation(q.toArea, locale);
+  const defaultPickupLocation = getDisplayLocation(q.fromArea, addressParams.fromAddress, locale);
+  const defaultDropoffLocation = getDisplayLocation(q.toArea, addressParams.toAddress, locale);
   const displayVehicle = t(`vehicle.${vehicleKeyMap[vehicle.name] || vehicle.name}`);
 
   return (

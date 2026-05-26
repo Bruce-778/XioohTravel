@@ -6,7 +6,12 @@ import { computeNightFee, isUrgentOrder } from "@/lib/bookingRules";
 import { formatDateTimeJST, parseJstDateTime } from "@/lib/timeFormat";
 import { formatMoneyFromJpy, getCurrency } from "@/lib/currency";
 import { getT, getLocale } from "@/lib/i18n";
-import { getLocalizedLocation, VEHICLE_NAMES } from "@/lib/locationData";
+import { VEHICLE_NAMES } from "@/lib/locationData";
+import {
+  appendOptionalAddressParams,
+  getDisplayLocation,
+  getOptionalStringParam,
+} from "@/lib/locationDisplay";
 import { getVehicleImageByKey } from "@/lib/vehicleImages";
 import { getEffectivePricingRulesForRoute } from "@/lib/effectivePricing";
 import { LuggageCapacityDisplay, type LuggageDisplayLabels } from "@/components/LuggageCapacityDisplay";
@@ -59,7 +64,11 @@ export default async function VehiclesPage({
   }
 
   const q = parsed.data;
-  const bookNowUrl = `/?${new URLSearchParams({
+  const addressParams = {
+    fromAddress: getOptionalStringParam(params, "fromAddress"),
+    toAddress: getOptionalStringParam(params, "toAddress"),
+  };
+  const bookNowParams = appendOptionalAddressParams(new URLSearchParams({
     tripType: q.tripType,
     fromArea: q.fromArea,
     toArea: q.toArea,
@@ -69,11 +78,14 @@ export default async function VehiclesPage({
     luggageSmall: String(q.luggageSmall),
     luggageMedium: String(q.luggageMedium),
     luggageLarge: String(q.luggageLarge),
-  }).toString()}#book-now`;
+  }), addressParams);
+  const bookNowUrl = `/?${bookNowParams.toString()}#book-now`;
   const pickupTime = parseJstDateTime(q.pickupTime);
   const now = new Date();
   const isUrgent = isUrgentOrder(now, pickupTime);
   const isNight = computeNightFee(pickupTime);
+  const displayFromLocation = getDisplayLocation(q.fromArea, addressParams.fromAddress, locale);
+  const displayToLocation = getDisplayLocation(q.toArea, addressParams.toAddress, locale);
 
   const { rows: vehicleTypes } = await db.query(
     "SELECT * FROM vehicle_types ORDER BY is_bus ASC, is_luxury ASC, seats ASC"
@@ -102,7 +114,7 @@ export default async function VehiclesPage({
           <h2 className="text-2xl font-semibold tracking-tight">{t("vehicles.title")}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-slate-600">
             <span>
-              {getLocalizedLocation(q.fromArea, locale)} → {getLocalizedLocation(q.toArea, locale)} · {formatDateTimeJST(pickupTime, locale)} · {q.passengers} {t("common.passengers")}
+              {displayFromLocation} → {displayToLocation} · {formatDateTimeJST(pickupTime, locale)} · {q.passengers} {t("common.passengers")}
             </span>
             <span className="font-medium text-slate-700">{t("luggage.requested")}</span>
             <LuggageCapacityDisplay
@@ -163,7 +175,7 @@ export default async function VehiclesPage({
             q.luggageMedium > v.luggage_medium ||
             q.luggageLarge > v.luggage_large;
 
-          const checkoutUrl = `/checkout?${new URLSearchParams({
+          const checkoutParams = appendOptionalAddressParams(new URLSearchParams({
             tripType: q.tripType,
             fromArea: q.fromArea,
             toArea: q.toArea,
@@ -174,7 +186,8 @@ export default async function VehiclesPage({
             luggageMedium: String(q.luggageMedium),
             luggageLarge: String(q.luggageLarge),
             vehicleTypeId: v.id,
-          }).toString()}`;
+          }), addressParams);
+          const checkoutUrl = `/checkout?${checkoutParams.toString()}`;
 
           return (
             <div

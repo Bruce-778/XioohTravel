@@ -352,7 +352,7 @@ function requestRouteEstimate({
   dropoffLocation: string;
   locale: string;
 }) {
-  return loadGoogleMaps(["distanceMatrix"]).then(
+  return loadGoogleMaps(["distanceMatrix"], locale).then(
     (google) =>
       new Promise<RouteEstimate>((resolve, reject) => {
         const service = new google.maps.DistanceMatrixService();

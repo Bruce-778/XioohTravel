@@ -4,11 +4,18 @@ type GoogleMapsWindow = Window & {
   google?: any;
   __googleMapsLoading?: boolean;
   __xioohGoogleMapsScriptPromise?: Promise<any> | null;
+  __xioohGoogleMapsScriptReject?: (error: Error) => void;
+  __xioohGoogleMapsScriptLoadId?: number;
+  __xioohGoogleMapsRequestedLanguage?: GoogleMapsLanguage;
+  __xioohGoogleMapsScriptLanguage?: GoogleMapsLanguage;
   gm_authFailure?: () => void;
 };
 
+type GoogleMapsLanguage = "en" | "zh-CN";
+
 const GOOGLE_MAPS_SCRIPT_ID = "google-maps-script";
 const GOOGLE_MAPS_TIMEOUT_MS = 10000;
+const GOOGLE_MAPS_REGION = "JP";
 const GOOGLE_MAPS_FEATURE_LABELS: Record<GoogleMapsFeature, string> = {
   places: "Places Autocomplete",
   distanceMatrix: "Distance Matrix",
@@ -45,11 +52,17 @@ function getGoogleMapsApiKey() {
   return apiKey;
 }
 
-function buildGoogleMapsScriptUrl(apiKey: string) {
+function getGoogleMapsLanguage(locale: string | undefined): GoogleMapsLanguage {
+  return locale?.toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+}
+
+function buildGoogleMapsScriptUrl(apiKey: string, language: GoogleMapsLanguage) {
   const url = new URL("https://maps.googleapis.com/maps/api/js");
   url.searchParams.set("key", apiKey);
   url.searchParams.set("libraries", "places");
   url.searchParams.set("loading", "async");
+  url.searchParams.set("language", language);
+  url.searchParams.set("region", GOOGLE_MAPS_REGION);
   return url.toString();
 }
 
@@ -127,11 +140,49 @@ function waitForGoogleMapsCore(googleWindow: GoogleMapsWindow, timeoutMs = GOOGL
   });
 }
 
-function waitForGoogleMapsScript(googleWindow: GoogleMapsWindow) {
+function resetGoogleMapsScript(googleWindow: GoogleMapsWindow) {
+  googleWindow.__xioohGoogleMapsScriptReject?.(
+    new Error("Google Maps script load was superseded")
+  );
+  document.getElementById(GOOGLE_MAPS_SCRIPT_ID)?.remove();
+  googleWindow.__xioohGoogleMapsScriptPromise = null;
+  googleWindow.__xioohGoogleMapsScriptReject = undefined;
+  googleWindow.__xioohGoogleMapsScriptLoadId = (googleWindow.__xioohGoogleMapsScriptLoadId ?? 0) + 1;
+  googleWindow.__xioohGoogleMapsRequestedLanguage = undefined;
+  googleWindow.__xioohGoogleMapsScriptLanguage = undefined;
+  delete googleWindow.google;
+}
+
+function waitForGoogleMapsScript(googleWindow: GoogleMapsWindow, language: GoogleMapsLanguage) {
   return new Promise<any>((resolve, reject) => {
+    const existingScript = document.getElementById(GOOGLE_MAPS_SCRIPT_ID);
+    if (existingScript) {
+      if (
+        googleWindow.__xioohGoogleMapsScriptLanguage !== language &&
+        googleWindow.__xioohGoogleMapsRequestedLanguage !== language
+      ) {
+        resetGoogleMapsScript(googleWindow);
+      } else {
+        waitForGoogleMapsCore(googleWindow, GOOGLE_MAPS_TIMEOUT_MS)
+          .then(resolve)
+          .catch(reject);
+        return;
+      }
+    }
+
+    const loadId = (googleWindow.__xioohGoogleMapsScriptLoadId ?? 0) + 1;
+    googleWindow.__xioohGoogleMapsScriptLoadId = loadId;
+    googleWindow.__xioohGoogleMapsScriptReject = reject;
+
     const complete = () => {
+      if (googleWindow.__xioohGoogleMapsScriptLoadId !== loadId) {
+        return;
+      }
+
       const google = googleWindow.google;
       if (google?.maps) {
+        googleWindow.__xioohGoogleMapsScriptReject = undefined;
+        googleWindow.__xioohGoogleMapsScriptLanguage = language;
         resolve(google);
       } else {
         const error = new Error("Google Maps failed to load");
@@ -141,33 +192,33 @@ function waitForGoogleMapsScript(googleWindow: GoogleMapsWindow) {
     };
 
     const fail = () => {
+      if (googleWindow.__xioohGoogleMapsScriptLoadId !== loadId) {
+        return;
+      }
+
       const error = new Error("Google Maps script failed to load");
       logGoogleMapsDiagnostic(error.message);
+      googleWindow.__xioohGoogleMapsScriptReject = undefined;
       reject(error);
     };
 
     const previousAuthFailure = googleWindow.gm_authFailure;
     googleWindow.gm_authFailure = () => {
+      if (googleWindow.__xioohGoogleMapsScriptLoadId !== loadId) {
+        previousAuthFailure?.();
+        return;
+      }
+
       previousAuthFailure?.();
       const error = new Error("Google Maps authentication failed");
       logGoogleMapsDiagnostic(error.message);
+      googleWindow.__xioohGoogleMapsScriptReject = undefined;
       reject(error);
     };
 
-    const existingScript = document.getElementById(GOOGLE_MAPS_SCRIPT_ID);
-    if (existingScript) {
-      existingScript.addEventListener("load", complete, { once: true });
-      existingScript.addEventListener("error", fail, { once: true });
-
-      waitForGoogleMapsCore(googleWindow, GOOGLE_MAPS_TIMEOUT_MS)
-        .then(resolve)
-        .catch(reject);
-      return;
-    }
-
     const script = document.createElement("script");
     script.id = GOOGLE_MAPS_SCRIPT_ID;
-    script.src = buildGoogleMapsScriptUrl(getGoogleMapsApiKey());
+    script.src = buildGoogleMapsScriptUrl(getGoogleMapsApiKey(), language);
     script.async = true;
     script.defer = true;
     script.onload = complete;
@@ -180,10 +231,29 @@ function waitForGoogleMapsScript(googleWindow: GoogleMapsWindow) {
   });
 }
 
-function ensureGoogleMapsScript() {
+function ensureGoogleMapsScript(locale?: string) {
   const googleWindow = getGoogleMapsWindow();
-  if (googleWindow.google?.maps) {
+  const language = getGoogleMapsLanguage(locale);
+
+  if (
+    googleWindow.google?.maps &&
+    googleWindow.__xioohGoogleMapsScriptLanguage === language
+  ) {
     return Promise.resolve(googleWindow.google);
+  }
+
+  if (
+    googleWindow.__xioohGoogleMapsScriptPromise &&
+    googleWindow.__xioohGoogleMapsRequestedLanguage !== language
+  ) {
+    resetGoogleMapsScript(googleWindow);
+  }
+
+  if (
+    googleWindow.google?.maps &&
+    googleWindow.__xioohGoogleMapsScriptLanguage !== language
+  ) {
+    resetGoogleMapsScript(googleWindow);
   }
 
   if (!googleWindow.__xioohGoogleMapsScriptPromise) {
@@ -193,9 +263,13 @@ function ensureGoogleMapsScript() {
       return Promise.reject(error);
     }
 
-    googleWindow.__xioohGoogleMapsScriptPromise = waitForGoogleMapsScript(googleWindow).catch(
+    googleWindow.__xioohGoogleMapsRequestedLanguage = language;
+    googleWindow.__xioohGoogleMapsScriptPromise = waitForGoogleMapsScript(googleWindow, language).catch(
       (error) => {
         googleWindow.__xioohGoogleMapsScriptPromise = null;
+        googleWindow.__xioohGoogleMapsScriptReject = undefined;
+        googleWindow.__xioohGoogleMapsRequestedLanguage = undefined;
+        googleWindow.__xioohGoogleMapsScriptLanguage = undefined;
         throw error;
       }
     );
@@ -204,8 +278,8 @@ function ensureGoogleMapsScript() {
   return googleWindow.__xioohGoogleMapsScriptPromise;
 }
 
-export async function loadGoogleMaps(features: GoogleMapsFeature[] = []) {
+export async function loadGoogleMaps(features: GoogleMapsFeature[] = [], locale?: string) {
   const googleWindow = getGoogleMapsWindow();
-  await ensureGoogleMapsScript();
+  await ensureGoogleMapsScript(locale);
   return waitForGoogleMapsFeatures(googleWindow, features);
 }

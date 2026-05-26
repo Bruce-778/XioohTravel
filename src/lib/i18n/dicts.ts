@@ -169,7 +169,7 @@ export const dicts: Record<Locale, Dict> = {
     "search.selectLocation": "选择地点",
     "search.placeholderAirport": "选择机场航站楼或输入具体地址",
     "search.placeholderLocation": "选择地点或输入具体地址",
-    "search.locationTip": "提示：可输入具体地址，或从上方选择热门区域/酒店",
+    "search.locationTip": "提示：请输入并选择具体地址或地点",
     "search.selectedTime": "已选时间",
 
     "vehicles.title": "选择车型",
@@ -585,7 +585,7 @@ export const dicts: Record<Locale, Dict> = {
     "admin.unsavedChangesText": "当前价格规则还有未保存的内容，确认关闭并丢弃这些修改吗？",
     "location.searching": "正在搜索...",
     "location.noResults": "未找到相关地点",
-    "location.googleConfigError": "Google Maps API 配置无效，仅显示热门地点",
+    "location.googleConfigError": "Google Maps API 配置无效，暂时无法搜索地点",
     "location.googlePowered": "可输入具体地址，由 Google Maps 提供支持",
 
     "success.title": "支付成功",
@@ -881,7 +881,7 @@ export const dicts: Record<Locale, Dict> = {
     "search.selectLocation": "Select location",
     "search.placeholderAirport": "Select airport terminal or enter address",
     "search.placeholderLocation": "Select location or enter address",
-    "search.locationTip": "Tip: Enter a specific address, or select from popular areas/hotels above",
+    "search.locationTip": "Tip: Enter and select a specific address or place",
     "search.selectedTime": "Selected time",
 
     "vehicles.title": "Choose a vehicle",
@@ -1297,7 +1297,7 @@ export const dicts: Record<Locale, Dict> = {
     "admin.unsavedChangesText": "This pricing rule has unsaved changes. Close it and discard those edits?",
     "location.searching": "Searching...",
     "location.noResults": "No results found",
-    "location.googleConfigError": "Invalid Google Maps API Key, showing popular areas only",
+    "location.googleConfigError": "Google Maps is unavailable, so place search cannot load",
     "location.googlePowered": "Powered by Google Maps",
 
     "success.title": "Payment Successful",

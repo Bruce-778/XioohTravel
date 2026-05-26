@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LocationSelector } from "./LocationSelector";
+import { appendOptionalAddressParams, normalizeOptionalAddress } from "@/lib/locationDisplay";
+import { LocationSelector, type LocationSelection } from "./LocationSelector";
 
 type TripType = "PICKUP" | "DROPOFF" | "POINT_TO_POINT";
 type Labels = {
@@ -41,6 +42,8 @@ type SearchDraft = {
   tripType: TripType;
   fromArea: string;
   toArea: string;
+  fromAddress?: string;
+  toAddress?: string;
   pickupTime: string;
   passengers: number;
   childSeats: number;
@@ -70,6 +73,8 @@ function createDefaultSearchDraft(): SearchDraft {
     tripType: "PICKUP",
     fromArea: "NRT T1",
     toArea: "Shinjuku",
+    fromAddress: undefined,
+    toAddress: undefined,
     pickupTime: createDefaultPickupTime(),
     passengers: 2,
     childSeats: 0,
@@ -118,6 +123,8 @@ function getSearchDraftFromParams(params: URLSearchParams): SearchDraft | null {
     tripType: isTripType(tripTypeParam) ? tripTypeParam : defaults.tripType,
     fromArea: params.get("fromArea") || defaults.fromArea,
     toArea: params.get("toArea") || defaults.toArea,
+    fromAddress: normalizeOptionalAddress(params.get("fromAddress")),
+    toAddress: normalizeOptionalAddress(params.get("toAddress")),
     pickupTime: params.get("pickupTime") || defaults.pickupTime,
     passengers: parseIntegerInRange(params.get("passengers"), defaults.passengers, 1, 50),
     childSeats: parseIntegerInRange(params.get("childSeats"), defaults.childSeats, 0, 10),
@@ -138,6 +145,8 @@ function normalizeStoredSearchDraft(value: Partial<SearchDraft>): SearchDraft {
     tripType: isTripType(value.tripType) ? value.tripType : defaults.tripType,
     fromArea: getStoredString(value.fromArea, defaults.fromArea),
     toArea: getStoredString(value.toArea, defaults.toArea),
+    fromAddress: normalizeOptionalAddress(value.fromAddress),
+    toAddress: normalizeOptionalAddress(value.toAddress),
     pickupTime: getStoredString(value.pickupTime, defaults.pickupTime),
     passengers: parseIntegerInRange(value.passengers, defaults.passengers, 1, 50),
     childSeats: parseIntegerInRange(value.childSeats, defaults.childSeats, 0, 10),
@@ -173,6 +182,7 @@ function buildSearchQuery(draft: SearchDraft) {
   p.set("tripType", draft.tripType);
   p.set("fromArea", draft.fromArea);
   p.set("toArea", draft.toArea);
+  appendOptionalAddressParams(p, draft);
   p.set("pickupTime", draft.pickupTime);
   p.set("passengers", String(draft.passengers));
   p.set("childSeats", String(draft.childSeats));
@@ -439,6 +449,8 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
   const [tripType, setTripType] = useState<TripType>("PICKUP");
   const [fromArea, setFromArea] = useState("");
   const [toArea, setToArea] = useState("");
+  const [fromAddress, setFromAddress] = useState<string | undefined>();
+  const [toAddress, setToAddress] = useState<string | undefined>();
   const [pickupTime, setPickupTime] = useState("");
   const [passengers, setPassengers] = useState(2);
   const [childSeats, setChildSeats] = useState(0);
@@ -455,6 +467,8 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
     setTripType(draft.tripType);
     setFromArea(draft.fromArea);
     setToArea(draft.toArea);
+    setFromAddress(draft.fromAddress);
+    setToAddress(draft.toAddress);
     setPickupTime(draft.pickupTime);
     setPassengers(draft.passengers);
     setChildSeats(draft.childSeats);
@@ -469,6 +483,8 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
       tripType,
       fromArea,
       toArea,
+      fromAddress: tripType === "PICKUP" ? undefined : fromAddress,
+      toAddress: tripType === "DROPOFF" ? undefined : toAddress,
       pickupTime,
       passengers,
       childSeats,
@@ -476,7 +492,19 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
       luggageMedium,
       luggageLarge,
     }),
-    [tripType, fromArea, toArea, pickupTime, passengers, childSeats, luggageSmall, luggageMedium, luggageLarge]
+    [
+      tripType,
+      fromArea,
+      toArea,
+      fromAddress,
+      toAddress,
+      pickupTime,
+      passengers,
+      childSeats,
+      luggageSmall,
+      luggageMedium,
+      luggageLarge,
+    ]
   );
 
   useEffect(() => {
@@ -496,6 +524,14 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
   };
   const childSeatsFullLabel = labels?.childSeats ?? "Child Seats";
   const childSeatsDisplayLabel = childSeatsFullLabel.replace(/\s*\(.+\)$/, "");
+  const handleFromAreaChange = (nextValue: string, selection?: LocationSelection) => {
+    setFromArea(nextValue);
+    setFromAddress(selection?.type === "google" ? selection.displayAddress : undefined);
+  };
+  const handleToAreaChange = (nextValue: string, selection?: LocationSelection) => {
+    setToArea(nextValue);
+    setToAddress(selection?.type === "google" ? selection.displayAddress : undefined);
+  };
 
   return (
     <form
@@ -527,7 +563,8 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
       <div className="grid md:grid-cols-2 gap-3">
         <LocationSelector
           value={fromArea}
-          onChange={setFromArea}
+          onChange={handleFromAreaChange}
+          displayValue={tripType === "PICKUP" ? undefined : fromAddress}
           label={tripType === "PICKUP" ? labels?.fromAirport : (tripType === "POINT_TO_POINT" ? labels?.from : labels?.fromLocation)}
           placeholder={tripType === "PICKUP" ? (labels?.placeholderAirport || labels?.selectAirport) : (labels?.placeholderLocation || labels?.selectLocation)}
           isAirport={tripType === "PICKUP"}
@@ -542,7 +579,8 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
         />
         <LocationSelector
           value={toArea}
-          onChange={setToArea}
+          onChange={handleToAreaChange}
+          displayValue={tripType === "DROPOFF" ? undefined : toAddress}
           label={tripType === "DROPOFF" ? labels?.toAirport : (tripType === "POINT_TO_POINT" ? labels?.to : labels?.toLocation)}
           placeholder={tripType === "DROPOFF" ? (labels?.placeholderAirport || labels?.selectAirport) : (labels?.placeholderLocation || labels?.selectLocation)}
           isAirport={tripType === "DROPOFF"}

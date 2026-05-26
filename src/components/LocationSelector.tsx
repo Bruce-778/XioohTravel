@@ -3,19 +3,31 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   AIRPORTS,
-  POPULAR_AREAS,
-  POPULAR_HOTELS,
-  findPricingAreaByInput,
   getLocalizedLocation,
-  type AirportTerminal,
-  type PopularArea,
-  type PopularHotel
 } from "@/lib/locationData";
 import { loadGoogleMaps, logGoogleMapsDiagnostic } from "@/lib/googleMapsClient";
 
+export type LocationSuggestionType = "airport" | "google";
+
+export type LocationSelection = {
+  value: string;
+  displayAddress?: string;
+  placeId?: string;
+  type: LocationSuggestionType;
+};
+
+type LocationSuggestion = {
+  text: string;
+  subtitle?: string;
+  displayAddress?: string;
+  placeId?: string;
+  type: LocationSuggestionType;
+};
+
 type LocationSelectorProps = {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, selection?: LocationSelection) => void;
+  displayValue?: string;
   placeholder?: string;
   label?: string;
   isAirport?: boolean;
@@ -30,23 +42,41 @@ type LocationSelectorProps = {
   };
 };
 
+function getGoogleDisplayAddress({
+  mainText,
+  secondaryText,
+  description,
+}: {
+  mainText?: string;
+  secondaryText?: string;
+  description?: string;
+}) {
+  const fullDescription = description?.trim();
+  if (fullDescription) {
+    return fullDescription;
+  }
+
+  return [mainText, secondaryText].map((item) => item?.trim()).filter(Boolean).join(", ");
+}
+
 // 真实 Google Places Autocomplete 搜索逻辑
-const searchGooglePlaces = async (query: string): Promise<any[]> => {
+function getGoogleMapsLocale(locale: string) {
+  return locale.startsWith("zh") ? "zh-CN" : "en";
+}
+
+const searchGooglePlaces = async (query: string, locale: string): Promise<LocationSuggestion[]> => {
   if (query.length < 2) return [];
 
+  const googleLocale = getGoogleMapsLocale(locale);
   let g: any;
   try {
-    g = await loadGoogleMaps(["places"]);
+    g = await loadGoogleMaps(["places"], locale);
   } catch (error) {
-    logGoogleMapsDiagnostic("Places Autocomplete is unavailable; using local fallback results", {
+    logGoogleMapsDiagnostic("Places Autocomplete is unavailable", {
       message: error instanceof Error ? error.message : String(error),
       query,
     });
-    return [
-      { text: `${query} Station`, subtitle: "Railway Station, Japan", type: "google" },
-      { text: `Hotel ${query}`, subtitle: "Hotel, Japan", type: "google" },
-      { text: `${query} Building`, subtitle: "Building, Japan", type: "google" },
-    ];
+    return [];
   }
 
   return new Promise((resolve) => {
@@ -54,8 +84,10 @@ const searchGooglePlaces = async (query: string): Promise<any[]> => {
     service.getPlacePredictions(
       {
         input: query,
-        componentRestrictions: { country: 'jp' }, // 限制在日本
-        types: ['establishment', 'geocode'] // 搜索建筑和地理位置
+        componentRestrictions: { country: "jp" },
+        language: googleLocale,
+        region: "JP",
+        types: ["establishment", "geocode"],
       },
       (predictions: any[], status: string) => {
         if (status !== g.maps.places.PlacesServiceStatus.OK || !predictions) {
@@ -63,12 +95,25 @@ const searchGooglePlaces = async (query: string): Promise<any[]> => {
           return;
         }
 
-        const results = predictions.map((p: any) => ({
-          text: p.structured_formatting.main_text,
-          subtitle: p.structured_formatting.secondary_text,
-          type: "google",
-          placeId: p.place_id
-        }));
+        const results: LocationSuggestion[] = predictions.map((p: any) => {
+          const mainText = String(p.structured_formatting?.main_text ?? "").trim();
+          const secondaryText = String(p.structured_formatting?.secondary_text ?? "").trim();
+          const description = String(p.description ?? "").trim();
+          const displayAddress = getGoogleDisplayAddress({
+            mainText,
+            secondaryText,
+            description,
+          });
+          const fallbackText = displayAddress.split(",")[0]?.trim() || query;
+
+          return {
+            text: mainText || fallbackText,
+            subtitle: displayAddress,
+            displayAddress,
+            type: "google",
+            placeId: p.place_id,
+          };
+        });
         resolve(results);
       }
     );
@@ -78,6 +123,7 @@ const searchGooglePlaces = async (query: string): Promise<any[]> => {
 export function LocationSelector({
   value,
   onChange,
+  displayValue,
   placeholder,
   label,
   isAirport = false,
@@ -97,7 +143,7 @@ export function LocationSelector({
       };
     }
 
-    loadGoogleMaps(["places"])
+    loadGoogleMaps(["places"], locale)
       .then(() => {
         if (isActive) {
           setApiError(false);
@@ -115,12 +161,11 @@ export function LocationSelector({
     return () => {
       isActive = false;
     };
-  }, [isAirport]);
+  }, [isAirport, locale]);
 
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [googleResults, setGoogleResults] = useState<any[]>([]);
+  const [googleResults, setGoogleResults] = useState<LocationSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -129,7 +174,6 @@ export function LocationSelector({
   // 关闭下拉框
   const closeDropdown = useCallback(() => {
     setIsOpen(false);
-    setShowSuggestions(false);
     setSearchQuery("");
   }, []);
 
@@ -147,23 +191,35 @@ export function LocationSelector({
   useEffect(() => {
     if (!isAirport && searchQuery.length >= 2) {
       setIsLoading(true);
+      let isActive = true;
       const timer = setTimeout(async () => {
-        const results = await searchGooglePlaces(searchQuery);
-        setGoogleResults(results);
-        setIsLoading(false);
+        const results = await searchGooglePlaces(searchQuery, locale);
+        if (isActive) {
+          setGoogleResults(results);
+          setIsLoading(false);
+        }
       }, 500);
-      return () => clearTimeout(timer);
+      return () => {
+        isActive = false;
+        clearTimeout(timer);
+      };
     } else {
       setGoogleResults([]);
+      setIsLoading(false);
     }
-  }, [searchQuery, isAirport]);
+  }, [searchQuery, isAirport, locale]);
 
-  const handleSelect = (text: string) => {
-    onChange(text);
+  const handleSelect = (suggestion: LocationSuggestion) => {
+    onChange(suggestion.text, {
+      value: suggestion.text,
+      displayAddress: suggestion.type === "google" ? suggestion.displayAddress : undefined,
+      placeId: suggestion.placeId,
+      type: suggestion.type,
+    });
     closeDropdown();
   };
 
-  const suggestions: Array<{ text: string; subtitle?: string; type: "airport" | "area" | "hotel" | "google" }> = [];
+  const suggestions: LocationSuggestion[] = [];
 
   if (isAirport) {
     // 机场模式：展示所有机场和航站楼
@@ -181,47 +237,14 @@ export function LocationSelector({
         }
       }
     }
-  } else {
-    // 地点模式：先展示热门，再展示 Google 搜索结果
-    const matchedArea = searchQuery ? findPricingAreaByInput(searchQuery) : undefined;
-    if (matchedArea) {
-      const name = isZh ? matchedArea.name.zh : matchedArea.name.en;
-      suggestions.push({
-        text: name,
-        subtitle: matchedArea.city,
-        type: "area"
-      });
-    }
-
-    // 热门区域
-    for (const area of POPULAR_AREAS) {
-      if (matchedArea?.code === area.code) continue;
-      const name = isZh ? area.name.zh : area.name.en;
-      if (!searchQuery || name.toLowerCase().includes(searchQuery.toLowerCase()) || area.code.toLowerCase().includes(searchQuery.toLowerCase())) {
-        suggestions.push({
-          text: name,
-          subtitle: area.city,
-          type: "area"
-        });
-      }
-    }
-    // 热门酒店
-    for (const hotel of POPULAR_HOTELS) {
-      const name = isZh ? hotel.name.zh : hotel.name.en;
-      if (!searchQuery || name.toLowerCase().includes(searchQuery.toLowerCase())) {
-        suggestions.push({
-          text: name,
-          subtitle: hotel.area,
-          type: "hotel"
-        });
-      }
-    }
   }
 
   const filteredSuggestions = suggestions.slice(0, 8);
   const allResults = [...filteredSuggestions, ...googleResults];
 
-  const displayValue = isOpen ? searchQuery : getLocalizedLocation(value, locale);
+  const selectedDisplayValue = displayValue?.trim() || getLocalizedLocation(value, locale);
+  const inputDisplayValue = isOpen ? searchQuery : selectedDisplayValue;
+  const shouldShowDropdown = isOpen && (isAirport || searchQuery.length >= 2);
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
@@ -245,16 +268,15 @@ export function LocationSelector({
         <input
           type="text"
           className="w-full pl-3 pr-10 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all cursor-pointer"
-          value={displayValue}
+          value={inputDisplayValue}
+          title={inputDisplayValue}
           readOnly={isAirport && !isOpen} // 机场模式未打开时只读，点击触发下拉
           onChange={(e) => {
             setSearchQuery(e.target.value);
-            setShowSuggestions(true);
             if (!isOpen) setIsOpen(true);
           }}
           onFocus={() => {
             setIsOpen(true);
-            setShowSuggestions(true);
             setSearchQuery(""); // 聚焦时清空搜索，展示完整列表
           }}
           placeholder={placeholder}
@@ -267,7 +289,7 @@ export function LocationSelector({
           </svg>
         </div>
 
-        {isOpen && (
+        {shouldShowDropdown && (
           <div className="absolute z-[100] w-full mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-80 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
             {isLoading && (
               <div className="px-4 py-3 text-sm text-slate-500 flex items-center gap-2">
@@ -283,22 +305,12 @@ export function LocationSelector({
                     key={i}
                     type="button"
                     className="w-full text-left px-4 py-3 hover:bg-brand-50 transition-colors flex items-start gap-3 border-b border-slate-50 last:border-0"
-                    onClick={() => handleSelect(s.text)}
+                    onClick={() => handleSelect(s)}
                   >
                     <div className="mt-0.5">
                       {s.type === "airport" && (
                         <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                        </svg>
-                      )}
-                      {s.type === "area" && (
-                        <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                        </svg>
-                      )}
-                      {s.type === "hotel" && (
-                        <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                         </svg>
                       )}
                       {s.type === "google" && (
@@ -308,9 +320,21 @@ export function LocationSelector({
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-sm text-slate-900 truncate">{s.text}</div>
+                      <div
+                        className={`font-semibold text-sm text-slate-900 ${
+                          s.type === "google" ? "whitespace-normal break-words" : "truncate"
+                        }`}
+                      >
+                        {s.text}
+                      </div>
                       {s.subtitle && (
-                        <div className="text-xs text-slate-500 mt-0.5 truncate">{s.subtitle}</div>
+                        <div
+                          className={`text-xs text-slate-500 mt-0.5 ${
+                            s.type === "google" ? "whitespace-normal break-words leading-snug" : "truncate"
+                          }`}
+                        >
+                          {s.subtitle}
+                        </div>
                       )}
                     </div>
                   </button>
