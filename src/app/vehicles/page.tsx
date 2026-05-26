@@ -137,18 +137,18 @@ export default async function VehiclesPage({
             </svg>
             {t("vehicles.backBookNow")}
           </Link>
-          <div>
+          <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
             {isUrgent ? (
-              <span className="inline-flex items-center px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+              <span className="inline-flex w-max max-w-full items-center rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-rose-700 leading-snug break-words sm:max-w-[22rem]">
                 {t("vehicles.urgent")}
               </span>
             ) : (
-              <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="inline-flex w-max max-w-full items-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-emerald-700 leading-snug break-words sm:max-w-[22rem]">
                 {t("vehicles.nonUrgent")}
               </span>
             )}
             {isNight ? (
-              <span className="ml-2 inline-flex items-center px-3 py-1 rounded-full bg-slate-50 text-slate-700 border border-slate-200">
+              <span className="inline-flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-slate-700 leading-snug">
                 {t("vehicles.night")}
               </span>
             ) : null}

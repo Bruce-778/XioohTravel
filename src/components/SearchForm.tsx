@@ -331,11 +331,11 @@ function DateTimePicker({
   }
 
   return (
-    <div className="grid w-full min-w-0 gap-3 sm:grid-cols-[minmax(0,1.35fr)_170px]">
+    <div className="grid w-full min-w-0 gap-3 sm:grid-cols-2">
       <div ref={rootRef} className="relative min-w-0">
         <button
           type="button"
-          className="input-field flex min-w-0 items-center justify-between text-left"
+          className="input-field flex h-[52px] min-w-0 items-center justify-between gap-3 text-left"
           onClick={() => setIsOpen((open) => !open)}
           aria-label={ariaLabel}
           aria-expanded={isOpen}
@@ -417,7 +417,7 @@ function DateTimePicker({
           type="time"
           step={300}
           lang={calendarLocale}
-          className="input-field block min-w-0 max-w-full appearance-none text-center sm:text-left"
+          className="input-field block h-[52px] min-w-0 max-w-full appearance-none text-left"
           value={timePart}
           onChange={(event) => updateTime(event.target.value)}
           aria-label={`${ariaLabel} ${isZh ? "时间" : "time"}`}
