@@ -82,7 +82,7 @@ export async function Footer() {
     { href: "/orders", label: t("footer.myOrders") },
   ];
   const navigateLinks: FooterLink[] = [
-    { href: "/fleet", label: t("footer.vehicleGuide") },
+    { href: "/vehicle-guide", label: t("footer.vehicleGuide") },
     { href: "/luggage-guide", label: t("footer.luggageGuide") },
     { href: "/drivers", label: t("footer.driverGuide") },
     { href: "/#faq", label: t("footer.faq") },
