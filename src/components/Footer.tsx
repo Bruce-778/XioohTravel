@@ -79,6 +79,7 @@ export async function Footer() {
   const contactLinks: FooterLink[] = [
     { href: WHATSAPP_URL, label: t("footer.whatsapp"), external: true },
     { href: `mailto:${SUPPORT_EMAIL}`, label: t("footer.email"), external: true },
+    { href: "/about", label: t("footer.about") },
     { href: "/orders", label: t("footer.myOrders") },
   ];
   const navigateLinks: FooterLink[] = [

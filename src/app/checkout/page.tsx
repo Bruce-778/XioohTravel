@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { SearchSchema } from "@/lib/validators";
-import { computeNightFee, isUrgentOrder } from "@/lib/bookingRules";
+import { CheckoutSearchSchema } from "@/lib/validators";
+import { canCreateBooking, computeNightFee, isUrgentOrder } from "@/lib/bookingRules";
 import { CheckoutForm } from "@/components/CheckoutForm";
 import { formatDateTimeJST, parseJstDateTime } from "@/lib/timeFormat";
 import { getCurrency } from "@/lib/currency";
 import { getT, getLocale } from "@/lib/i18n";
-import { z } from "zod";
 import { VEHICLE_NAMES } from "@/lib/locationData";
 import { getEffectivePricingRule } from "@/lib/effectivePricing";
 import {
@@ -25,14 +24,13 @@ export default async function CheckoutPage({
   const locale = await getLocale();
   const currency = await getCurrency();
 
-  const ParsedSchema = SearchSchema.extend({ vehicleTypeId: z.string().min(5) });
-  const parsed = ParsedSchema.safeParse({
+  const parsed = CheckoutSearchSchema.safeParse({
     tripType: params.tripType,
     fromArea: params.fromArea,
     toArea: params.toArea,
     pickupTime: params.pickupTime,
     passengers: params.passengers,
-    childSeats: params.childSeats ?? 0,
+    children: params.children,
     luggageSmall: params.luggageSmall ?? 0,
     luggageMedium: params.luggageMedium ?? 0,
     luggageLarge: params.luggageLarge ?? 0,
@@ -68,14 +66,34 @@ export default async function CheckoutPage({
     toArea: q.toArea,
     pickupTime: q.pickupTime,
     passengers: String(q.passengers),
-    childSeats: String(q.childSeats),
+    children: String(q.children),
     luggageSmall: String(q.luggageSmall),
     luggageMedium: String(q.luggageMedium),
-    luggageLarge: String(q.luggageLarge),
   }), addressParams);
   const vehiclesBackUrl = `/vehicles?${vehiclesBackParams.toString()}`;
+  const bookNowUrl = `/?${vehiclesBackParams.toString()}#book-now`;
   const pickupTime = parseJstDateTime(q.pickupTime);
   const now = new Date();
+  if (!canCreateBooking(now, pickupTime)) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-10">
+        <div className="p-5 bg-white border border-slate-200 rounded-2xl">
+          <div className="font-semibold">{t("api.bookingLeadTime")}</div>
+          <div className="mt-3 flex gap-3">
+            <Link
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-brand-100 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:border-brand-200 hover:bg-brand-100"
+              href={bookNowUrl}
+            >
+              <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              {t("vehicles.backBookNow")}
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const isUrgent = isUrgentOrder(now, pickupTime);
   const isNight = computeNightFee(pickupTime);
 
@@ -152,15 +170,6 @@ export default async function CheckoutPage({
             </svg>
             {t("checkout.backVehicles")}
           </Link>
-          <div
-            className={`max-w-full rounded-full border px-3.5 py-2 text-sm font-medium leading-snug ${
-              isUrgent
-                ? "border-rose-200 bg-rose-50 text-rose-600"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700"
-            }`}
-          >
-            {isUrgent ? t("checkout.urgentOrderHint") : t("checkout.nonUrgentOrderHint")}
-          </div>
           {rule.source === "override" ? (
             <div className="max-w-full rounded-full border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm font-semibold leading-snug text-amber-700">
               {t("pricing.specialPriceApplied")}
@@ -179,9 +188,7 @@ export default async function CheckoutPage({
           displayPickupTime: formatDateTimeJST(pickupTime, locale),
           displayVehicle,
           currency,
-          baseJpy: base,
-          nightJpy: night,
-          urgentJpy: urgent,
+          baseJpy: base + urgent + night,
         }}
         locale={locale}
         labels={{
@@ -200,13 +207,14 @@ export default async function CheckoutPage({
           tripType: t("checkout.tripType"),
           pickupTime: t("checkout.pickupTime"),
           passengers: t("search.passengers"),
+          children: t("search.children"),
           vehicle: t("checkout.vehicle"),
           basePrice: t("checkout.basePrice"),
-          nightFee: t("checkout.nightFee"),
-          urgentFee: t("checkout.urgentFee"),
           childSeatFee: t("checkout.childSeatFee"),
+          childSeatLimitHint: t("checkout.childSeatLimitHint"),
           meetAndGreet: t("checkout.meetAndGreet"),
           meetAndGreetFee: t("checkout.meetAndGreetFee"),
+          meetAndGreetLimitHint: t("checkout.meetAndGreetLimitHint"),
           total: t("checkout.total"),
           paymentCancelledTip: t("checkout.paymentCancelledTip"),
           aboutDuration: t("checkout.aboutDuration"),

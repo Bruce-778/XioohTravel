@@ -50,17 +50,17 @@ export function Navbar({
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-4 py-3">
+        <div className="flex items-center justify-between gap-3 py-3">
           <Link 
             href="/" 
             className="group flex min-w-0 items-center gap-3 py-1 transition-opacity duration-200 hover:opacity-85"
           >
-            <div className="relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-2xl sm:h-14 sm:w-14">
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl sm:h-14 sm:w-14 sm:rounded-2xl">
               <Image
                 src="/brand/favicon.jpg"
                 alt={BRAND_NAME}
                 fill
-                sizes="(min-width: 640px) 56px, 52px"
+                sizes="(min-width: 640px) 56px, 40px"
                 priority
                 className="object-cover"
               />
@@ -78,8 +78,8 @@ export function Navbar({
             </span>
           </Link>
 
-          <nav className="flex shrink-0 items-center gap-2 text-sm sm:gap-4">
-            <div className="flex items-center gap-1 mr-2 border-r border-slate-200 pr-2">
+          <nav className="flex shrink-0 items-center justify-end gap-2 text-sm sm:gap-3">
+            <div className="mr-2 hidden items-center gap-1 border-r border-slate-200 pr-2 md:flex">
               <AuthLink 
                 href="/" 
                 className="px-3 py-2 rounded-lg text-brand-600 hover:bg-brand-50 font-bold transition-colors duration-200"
@@ -106,19 +106,21 @@ export function Navbar({
               zhLabel={labels.zh}
               enLabel={labels.en}
             />
-            <CurrencySwitch
-              currency={currency}
-              label={labels.currency}
-              items={[
-                { code: "JPY", text: labels.jpy },
-                { code: "CNY", text: labels.cny },
-                { code: "USD", text: labels.usd }
-              ]}
-            />
+            <div className="hidden sm:block">
+              <CurrencySwitch
+                currency={currency}
+                label={labels.currency}
+                items={[
+                  { code: "JPY", text: labels.jpy },
+                  { code: "CNY", text: labels.cny },
+                  { code: "USD", text: labels.usd }
+                ]}
+              />
+            </div>
 
             {!loading && (
               user ? (
-                <div className="flex items-center gap-1">
+                <div className="hidden items-center gap-1 sm:flex">
                   <span className="text-xs text-slate-400 font-normal mr-1 max-w-[120px] truncate">
                     {user.email}
                   </span>
@@ -132,7 +134,7 @@ export function Navbar({
               ) : (
                 <Link
                   href={`/login`}
-                  className="px-3 py-2 rounded-lg text-slate-700 hover:text-brand-600 hover:bg-slate-50 font-medium transition-colors duration-200"
+                  className="hidden px-3 py-2 rounded-lg text-slate-700 hover:text-brand-600 hover:bg-slate-50 font-medium transition-colors duration-200 sm:block"
                 >
                   {labels.login}
                 </Link>

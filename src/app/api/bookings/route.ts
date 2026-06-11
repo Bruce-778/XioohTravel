@@ -17,10 +17,9 @@ type CheckoutCancelData = {
   toArea: string;
   pickupTime: string;
   passengers: number;
-  childSeats: number;
+  children: number;
   luggageSmall: number;
   luggageMedium: number;
-  luggageLarge: number;
   vehicleTypeId: string;
 };
 
@@ -32,10 +31,9 @@ function buildCheckoutCancelUrl(req: Request, bookingId: string, data: CheckoutC
     toArea: data.toArea,
     pickupTime: data.pickupTime,
     passengers: String(data.passengers),
-    childSeats: String(data.childSeats),
+    children: String(data.children),
     luggageSmall: String(data.luggageSmall),
     luggageMedium: String(data.luggageMedium),
-    luggageLarge: String(data.luggageLarge),
     vehicleTypeId: data.vehicleTypeId,
     payment: "cancelled",
     bookingId,

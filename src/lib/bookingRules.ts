@@ -1,6 +1,8 @@
 export const JAPAN_TZ = "Asia/Tokyo";
 export const CHILD_SEAT_FEE_JPY = 1000; // 约合 50 CNY
 export const MEET_AND_GREET_SIGN_FEE_JPY = 2000;
+export const MIN_BOOKING_LEAD_HOURS = 12;
+export const URGENT_ORDER_HOURS = 24;
 
 export function hoursBetween(nowMs: number, futureMs: number) {
   return (futureMs - nowMs) / (1000 * 60 * 60);
@@ -8,7 +10,12 @@ export function hoursBetween(nowMs: number, futureMs: number) {
 
 export function isUrgentOrder(now: Date, pickupTime: Date) {
   const diffHours = hoursBetween(now.getTime(), pickupTime.getTime());
-  return diffHours < 24;
+  return diffHours < URGENT_ORDER_HOURS;
+}
+
+export function canCreateBooking(now: Date, pickupTime: Date) {
+  const diffHours = hoursBetween(now.getTime(), pickupTime.getTime());
+  return diffHours >= MIN_BOOKING_LEAD_HOURS;
 }
 
 export function canUserCancel(now: Date, pickupTime: Date, isUrgent: boolean) {

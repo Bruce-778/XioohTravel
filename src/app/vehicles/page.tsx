@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { SearchSchema } from "@/lib/validators";
-import { computeNightFee, isUrgentOrder } from "@/lib/bookingRules";
+import { canCreateBooking, computeNightFee, isUrgentOrder } from "@/lib/bookingRules";
 import { formatDateTimeJST, parseJstDateTime } from "@/lib/timeFormat";
 import { formatMoneyFromJpy, getCurrency } from "@/lib/currency";
 import { getT, getLocale } from "@/lib/i18n";
@@ -16,6 +16,28 @@ import { getVehicleImageByKey } from "@/lib/vehicleImages";
 import { getEffectivePricingRulesForRoute } from "@/lib/effectivePricing";
 import { LuggageCapacityDisplay, type LuggageDisplayLabels } from "@/components/LuggageCapacityDisplay";
 
+function formatPassengerSummary({
+  passengers,
+  children,
+  locale,
+  t,
+}: {
+  passengers: number;
+  children: number;
+  locale: "zh" | "en";
+  t: (key: string) => string;
+}) {
+  const passengerText = `${passengers} ${t("common.passengers")}`;
+  if (children <= 0) return passengerText;
+
+  if (locale === "zh") {
+    return `${passengerText}（${t("common.including")} ${children} ${t("common.child")}）`;
+  }
+
+  const childLabel = children === 1 ? t("common.child") : t("common.children");
+  return `${passengerText} (${t("common.including")} ${children} ${childLabel})`;
+}
+
 export default async function VehiclesPage({
   searchParams
 }: {
@@ -28,10 +50,8 @@ export default async function VehiclesPage({
   const luggageLabels: LuggageDisplayLabels = {
     carryOn: t("luggage.carryOn"),
     mediumSuitcase: t("luggage.mediumSuitcase"),
-    largeSuitcase: t("luggage.largeSuitcase"),
     carryOnSize: t("luggage.carryOnSize"),
     mediumSize: t("luggage.mediumSize"),
-    largeSize: t("luggage.largeSize"),
   };
   const parsed = SearchSchema.safeParse({
     tripType: params.tripType,
@@ -39,7 +59,7 @@ export default async function VehiclesPage({
     toArea: params.toArea,
     pickupTime: params.pickupTime,
     passengers: params.passengers,
-    childSeats: params.childSeats ?? 0,
+    children: params.children,
     luggageSmall: params.luggageSmall ?? 0,
     luggageMedium: params.luggageMedium ?? 0,
     luggageLarge: params.luggageLarge ?? 0
@@ -74,18 +94,43 @@ export default async function VehiclesPage({
     toArea: q.toArea,
     pickupTime: q.pickupTime,
     passengers: String(q.passengers),
-    childSeats: String(q.childSeats),
+    children: String(q.children),
     luggageSmall: String(q.luggageSmall),
     luggageMedium: String(q.luggageMedium),
-    luggageLarge: String(q.luggageLarge),
   }), addressParams);
   const bookNowUrl = `/?${bookNowParams.toString()}#book-now`;
   const pickupTime = parseJstDateTime(q.pickupTime);
   const now = new Date();
+  if (!canCreateBooking(now, pickupTime)) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-10">
+        <div className="p-5 bg-white border border-slate-200 rounded-2xl">
+          <div className="font-semibold">{t("api.bookingLeadTime")}</div>
+          <div className="mt-4">
+            <Link
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-brand-100 bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700 transition hover:border-brand-200 hover:bg-brand-100"
+              href={bookNowUrl}
+            >
+              <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              {t("vehicles.backBookNow")}
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const isUrgent = isUrgentOrder(now, pickupTime);
   const isNight = computeNightFee(pickupTime);
   const displayFromLocation = getDisplayLocation(q.fromArea, addressParams.fromAddress, locale);
   const displayToLocation = getDisplayLocation(q.toArea, addressParams.toAddress, locale);
+  const passengerSummary = formatPassengerSummary({
+    passengers: q.passengers,
+    children: q.children,
+    locale,
+    t,
+  });
 
   const { rows: vehicleTypes } = await db.query(
     "SELECT * FROM vehicle_types ORDER BY is_bus ASC, is_luxury ASC, seats ASC"
@@ -114,13 +159,12 @@ export default async function VehiclesPage({
           <h2 className="text-2xl font-semibold tracking-tight">{t("vehicles.title")}</h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-slate-600">
             <span>
-              {displayFromLocation} → {displayToLocation} · {formatDateTimeJST(pickupTime, locale)} · {q.passengers} {t("common.passengers")}
+              {displayFromLocation} → {displayToLocation} · {formatDateTimeJST(pickupTime, locale)} · {passengerSummary}
             </span>
             <span className="font-medium text-slate-700">{t("luggage.requested")}</span>
             <LuggageCapacityDisplay
               small={q.luggageSmall}
               medium={q.luggageMedium}
-              large={q.luggageLarge}
               labels={luggageLabels}
               showSizes
               className="gap-1.5"
@@ -130,29 +174,13 @@ export default async function VehiclesPage({
         <div className="flex flex-col items-start gap-2 text-sm md:items-end">
           <Link
             href={bookNowUrl}
-            className="inline-flex items-center gap-2 rounded-xl border border-brand-100 bg-brand-50 px-4 py-2 font-semibold text-brand-700 transition hover:border-brand-200 hover:bg-brand-100"
+            className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl border border-brand-100 bg-brand-50 px-4 py-2 font-semibold text-brand-700 transition hover:border-brand-200 hover:bg-brand-100"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
             {t("vehicles.backBookNow")}
           </Link>
-          <div className="flex flex-wrap items-center justify-start gap-2 md:justify-end">
-            {isUrgent ? (
-              <span className="inline-flex w-max max-w-full items-center rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-rose-700 leading-snug break-words sm:max-w-[22rem]">
-                {t("vehicles.urgent")}
-              </span>
-            ) : (
-              <span className="inline-flex w-max max-w-full items-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-emerald-700 leading-snug break-words sm:max-w-[22rem]">
-                {t("vehicles.nonUrgent")}
-              </span>
-            )}
-            {isNight ? (
-              <span className="inline-flex items-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-slate-700 leading-snug">
-                {t("vehicles.night")}
-              </span>
-            ) : null}
-          </div>
         </div>
       </div>
 
@@ -172,8 +200,7 @@ export default async function VehiclesPage({
           const capacityExceeded =
             q.passengers > v.seats ||
             q.luggageSmall > v.luggage_small ||
-            q.luggageMedium > v.luggage_medium ||
-            q.luggageLarge > v.luggage_large;
+            q.luggageMedium > v.luggage_medium;
 
           const checkoutParams = appendOptionalAddressParams(new URLSearchParams({
             tripType: q.tripType,
@@ -181,10 +208,9 @@ export default async function VehiclesPage({
             toArea: q.toArea,
             pickupTime: q.pickupTime,
             passengers: String(q.passengers),
-            childSeats: String(q.childSeats),
+            children: String(q.children),
             luggageSmall: String(q.luggageSmall),
             luggageMedium: String(q.luggageMedium),
-            luggageLarge: String(q.luggageLarge),
             vehicleTypeId: v.id,
           }), addressParams);
           const checkoutUrl = `/checkout?${checkoutParams.toString()}`;
@@ -235,7 +261,6 @@ export default async function VehiclesPage({
                   <LuggageCapacityDisplay
                     small={v.luggage_small}
                     medium={v.luggage_medium}
-                    large={v.luggage_large}
                     labels={luggageLabels}
                   />
                 </div>

@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { canCreateBooking, MIN_BOOKING_LEAD_HOURS } from "@/lib/bookingRules";
 import { appendOptionalAddressParams, normalizeOptionalAddress } from "@/lib/locationDisplay";
+import { formatJstDateTimeLocalValue, parseJstDateTime } from "@/lib/timeFormat";
 import { LocationSelector, type LocationSelection } from "./LocationSelector";
 
 type TripType = "PICKUP" | "DROPOFF" | "POINT_TO_POINT";
@@ -14,11 +16,12 @@ type Labels = {
   to: string;
   pickupTime: string;
   passengers: string;
-  childSeats: string;
+  children: string;
   luggageSmall: string;
   luggageMedium: string;
-  luggageLarge: string;
   submit: string;
+  bookingLeadTimeError?: string;
+  pickupTooSoonError?: string;
   timezoneHint?: string;
   fromAirport: string;
   fromLocation: string;
@@ -46,26 +49,25 @@ type SearchDraft = {
   toAddress?: string;
   pickupTime: string;
   passengers: number;
-  childSeats: number;
+  children: number;
   luggageSmall: number;
   luggageMedium: number;
-  luggageLarge: number;
 };
 
 function cn(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
 
-function formatDateTimeLocalValue(date: Date) {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
 function createDefaultPickupTime() {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(10, 0, 0, 0);
-  return formatDateTimeLocalValue(tomorrow);
+  return formatJstDateTimeLocalValue(tomorrow);
+}
+
+function createMinimumPickupDate(now: Date) {
+  const minimum = new Date(now.getTime() + MIN_BOOKING_LEAD_HOURS * 60 * 60 * 1000);
+  return formatJstDateTimeLocalValue(minimum).split("T")[0] ?? "";
 }
 
 function createDefaultSearchDraft(): SearchDraft {
@@ -77,10 +79,9 @@ function createDefaultSearchDraft(): SearchDraft {
     toAddress: undefined,
     pickupTime: createDefaultPickupTime(),
     passengers: 2,
-    childSeats: 0,
+    children: 0,
     luggageSmall: 1,
     luggageMedium: 0,
-    luggageLarge: 0,
   };
 }
 
@@ -104,10 +105,9 @@ function hasSearchDraftParams(params: URLSearchParams) {
     "toArea",
     "pickupTime",
     "passengers",
-    "childSeats",
+    "children",
     "luggageSmall",
     "luggageMedium",
-    "luggageLarge",
   ].some((key) => params.has(key));
 }
 
@@ -127,10 +127,9 @@ function getSearchDraftFromParams(params: URLSearchParams): SearchDraft | null {
     toAddress: normalizeOptionalAddress(params.get("toAddress")),
     pickupTime: params.get("pickupTime") || defaults.pickupTime,
     passengers: parseIntegerInRange(params.get("passengers"), defaults.passengers, 1, 50),
-    childSeats: parseIntegerInRange(params.get("childSeats"), defaults.childSeats, 0, 10),
+    children: parseIntegerInRange(params.get("children"), defaults.children, 0, 10),
     luggageSmall: parseIntegerInRange(params.get("luggageSmall"), defaults.luggageSmall, 0, 20),
     luggageMedium: parseIntegerInRange(params.get("luggageMedium"), defaults.luggageMedium, 0, 20),
-    luggageLarge: parseIntegerInRange(params.get("luggageLarge"), defaults.luggageLarge, 0, 20),
   };
 }
 
@@ -149,10 +148,9 @@ function normalizeStoredSearchDraft(value: Partial<SearchDraft>): SearchDraft {
     toAddress: normalizeOptionalAddress(value.toAddress),
     pickupTime: getStoredString(value.pickupTime, defaults.pickupTime),
     passengers: parseIntegerInRange(value.passengers, defaults.passengers, 1, 50),
-    childSeats: parseIntegerInRange(value.childSeats, defaults.childSeats, 0, 10),
+    children: parseIntegerInRange(value.children, defaults.children, 0, 10),
     luggageSmall: parseIntegerInRange(value.luggageSmall, defaults.luggageSmall, 0, 20),
     luggageMedium: parseIntegerInRange(value.luggageMedium, defaults.luggageMedium, 0, 20),
-    luggageLarge: parseIntegerInRange(value.luggageLarge, defaults.luggageLarge, 0, 20),
   };
 }
 
@@ -185,10 +183,9 @@ function buildSearchQuery(draft: SearchDraft) {
   appendOptionalAddressParams(p, draft);
   p.set("pickupTime", draft.pickupTime);
   p.set("passengers", String(draft.passengers));
-  p.set("childSeats", String(draft.childSeats));
+  p.set("children", String(draft.children));
   p.set("luggageSmall", String(draft.luggageSmall));
   p.set("luggageMedium", String(draft.luggageMedium));
-  p.set("luggageLarge", String(draft.luggageLarge));
   return p.toString();
 }
 
@@ -266,15 +263,18 @@ function DateTimePicker({
   locale,
   onChange,
   ariaLabel,
+  minDate,
 }: {
   value: string;
   locale: string;
   onChange: (nextValue: string) => void;
   ariaLabel: string;
+  minDate?: string;
 }) {
   const parsed = useMemo(() => parseDateTimeLocalParts(value), [value]);
   const datePart = value.split("T")[0] ?? "";
   const timePart = value.split("T")[1]?.slice(0, 5) ?? "10:00";
+  const minDatePart = minDate?.trim() ?? "";
   const [isOpen, setIsOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState(() =>
     parsed ? new Date(parsed.year, parsed.month - 1, 1) : new Date()
@@ -387,19 +387,23 @@ function DateTimePicker({
             <div className="mt-1 grid grid-cols-7 gap-1">
               {calendarDays.map((day) => {
                 const isSelected = day.key === datePart;
+                const isDisabled = Boolean(minDatePart && day.key < minDatePart);
+                const isActiveSelected = isSelected && !isDisabled;
                 return (
                   <button
                     key={day.key}
                     type="button"
+                    disabled={isDisabled}
                     onClick={() => updateDate(day.key)}
                     className={cn(
                       "flex h-10 items-center justify-center rounded-xl text-sm transition-colors",
-                      isSelected
+                      isActiveSelected
                         ? "bg-brand-600 font-semibold text-white shadow-sm"
                         : day.inCurrentMonth
                           ? "text-slate-700 hover:bg-slate-100"
                           : "text-slate-300 hover:bg-slate-50",
-                      day.isToday && !isSelected && "border border-brand-200 bg-brand-50/60 text-brand-700"
+                      day.isToday && !isActiveSelected && !isDisabled && "border border-brand-200 bg-brand-50/60 text-brand-700",
+                      isDisabled && "cursor-not-allowed border-0 bg-transparent font-normal text-slate-300 opacity-60 shadow-none hover:bg-transparent hover:text-slate-300"
                     )}
                   >
                     {day.date.getDate()}
@@ -415,7 +419,7 @@ function DateTimePicker({
         <span className="sr-only">{isZh ? "时间" : "Time"}</span>
         <input
           type="time"
-          step={300}
+          step={60}
           lang={calendarLocale}
           className="input-field block h-[52px] min-w-0 max-w-full appearance-none text-left"
           value={timePart}
@@ -446,6 +450,7 @@ function formatDateTimePreview(value: string, locale: string) {
 
 export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?: string }) {
   const router = useRouter();
+  const [bookingRuleNow, setBookingRuleNow] = useState(() => new Date());
   const [tripType, setTripType] = useState<TripType>("PICKUP");
   const [fromArea, setFromArea] = useState("");
   const [toArea, setToArea] = useState("");
@@ -453,11 +458,20 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
   const [toAddress, setToAddress] = useState<string | undefined>();
   const [pickupTime, setPickupTime] = useState("");
   const [passengers, setPassengers] = useState(2);
-  const [childSeats, setChildSeats] = useState(0);
+  const [children, setChildren] = useState(0);
   const [luggageSmall, setLuggageSmall] = useState(1);
   const [luggageMedium, setLuggageMedium] = useState(0);
-  const [luggageLarge, setLuggageLarge] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [hasHydratedSearchDraft, setHasHydratedSearchDraft] = useState(false);
+  const minimumPickupDate = useMemo(() => createMinimumPickupDate(bookingRuleNow), [bookingRuleNow]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setBookingRuleNow(new Date());
+    }, 60_000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -471,10 +485,9 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
     setToAddress(draft.toAddress);
     setPickupTime(draft.pickupTime);
     setPassengers(draft.passengers);
-    setChildSeats(draft.childSeats);
+    setChildren(Math.min(draft.children, draft.passengers));
     setLuggageSmall(draft.luggageSmall);
     setLuggageMedium(draft.luggageMedium);
-    setLuggageLarge(draft.luggageLarge);
     setHasHydratedSearchDraft(true);
   }, []);
 
@@ -487,10 +500,9 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
       toAddress: tripType === "DROPOFF" ? undefined : toAddress,
       pickupTime,
       passengers,
-      childSeats,
+      children: Math.min(children, passengers),
       luggageSmall,
       luggageMedium,
-      luggageLarge,
     }),
     [
       tripType,
@@ -500,10 +512,9 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
       toAddress,
       pickupTime,
       passengers,
-      childSeats,
+      children,
       luggageSmall,
       luggageMedium,
-      luggageLarge,
     ]
   );
 
@@ -522,22 +533,40 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
     DROPOFF: labels?.dropoff ?? "Drop-off",
     POINT_TO_POINT: labels?.p2p ?? "Point-to-point"
   };
-  const childSeatsFullLabel = labels?.childSeats ?? "Child Seats";
-  const childSeatsDisplayLabel = childSeatsFullLabel.replace(/\s*\(.+\)$/, "");
   const handleFromAreaChange = (nextValue: string, selection?: LocationSelection) => {
+    setError(null);
     setFromArea(nextValue);
     setFromAddress(selection?.type === "google" ? selection.displayAddress : undefined);
   };
   const handleToAreaChange = (nextValue: string, selection?: LocationSelection) => {
+    setError(null);
     setToArea(nextValue);
     setToAddress(selection?.type === "google" ? selection.displayAddress : undefined);
+  };
+  const childrenLabel = labels?.children ?? "Children";
+  const pickupTooSoonError =
+    labels?.pickupTooSoonError ?? labels?.bookingLeadTimeError ?? "Please book at least 12 hours in advance.";
+  const pickupTimeValidationError =
+    pickupTime && !canCreateBooking(bookingRuleNow, parseJstDateTime(pickupTime))
+      ? pickupTooSoonError
+      : null;
+  const visibleError = error ?? pickupTimeValidationError;
+  const handlePickupTimeChange = (nextValue: string) => {
+    setPickupTime(nextValue);
+    setError(null);
   };
 
   return (
     <form
       className="space-y-4"
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
+        const selectedPickupTime = parseJstDateTime(pickupTime);
+        if (!canCreateBooking(new Date(), selectedPickupTime)) {
+          setError(pickupTooSoonError);
+          return;
+        }
         writeSearchDraft(currentDraft);
         router.push(`/vehicles?${query}`);
       }}
@@ -605,9 +634,10 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
         </div>
         <DateTimePicker
           value={pickupTime}
-          onChange={setPickupTime}
+          onChange={handlePickupTimeChange}
           locale={locale}
           ariaLabel={labels?.pickupTime ?? "Pickup Time"}
+          minDate={minimumPickupDate}
         />
         {labels?.timezoneHint ? (
           <div className="mt-1.5 text-xs text-slate-500 flex items-center gap-1">
@@ -624,7 +654,7 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <label className="block">
           <div className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">{labels?.passengers ?? "Passengers"}</div>
           <input
@@ -633,24 +663,33 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
             max={50}
             className="input-field"
             value={passengers}
-            onChange={(e) => setPassengers(Number(e.target.value))}
+            onChange={(e) => {
+              const nextPassengers = Number(e.target.value);
+              setError(null);
+              setPassengers(nextPassengers);
+              setChildren((current) => Math.min(current, nextPassengers));
+            }}
           />
         </label>
         <label className="block">
           <div
             className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis"
-            title={childSeatsFullLabel}
+            title={childrenLabel}
           >
-            {childSeatsDisplayLabel}
+            {childrenLabel}
           </div>
           <input
             type="number"
             min={0}
-            max={10}
+            max={Math.min(passengers, 10)}
             className="input-field"
-            value={childSeats}
-            onChange={(e) => setChildSeats(Number(e.target.value))}
-            aria-label={childSeatsFullLabel}
+            value={children}
+            onChange={(e) => {
+              const nextChildren = Number(e.target.value);
+              setError(null);
+              setChildren(Number.isNaN(nextChildren) ? 0 : Math.max(0, Math.min(nextChildren, Math.min(passengers, 10))));
+            }}
+            aria-label={childrenLabel}
           />
         </label>
         <label className="block">
@@ -661,7 +700,10 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
             max={20}
             className="input-field"
             value={luggageSmall}
-            onChange={(e) => setLuggageSmall(Number(e.target.value))}
+            onChange={(e) => {
+              setError(null);
+              setLuggageSmall(Number(e.target.value));
+            }}
           />
         </label>
         <label className="block">
@@ -672,21 +714,19 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
             max={20}
             className="input-field"
             value={luggageMedium}
-            onChange={(e) => setLuggageMedium(Number(e.target.value))}
-          />
-        </label>
-        <label className="block">
-          <div className="text-sm font-medium text-slate-700 mb-2 whitespace-nowrap overflow-hidden text-ellipsis">{labels?.luggageLarge ?? "Large luggages"}</div>
-          <input
-            type="number"
-            min={0}
-            max={20}
-            className="input-field"
-            value={luggageLarge}
-            onChange={(e) => setLuggageLarge(Number(e.target.value))}
+            onChange={(e) => {
+              setError(null);
+              setLuggageMedium(Number(e.target.value));
+            }}
           />
         </label>
       </div>
+
+      {visibleError ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+          {visibleError}
+        </div>
+      ) : null}
 
       <button
         type="submit"

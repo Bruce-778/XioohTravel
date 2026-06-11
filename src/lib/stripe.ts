@@ -249,29 +249,23 @@ function buildStripePaymentFeeBreakdown(
 function buildCheckoutPricingComponents(input: CreateCheckoutSessionInput) {
   const pickupDate = input.pickupTime.toISOString().slice(0, 16).replace("T", " ");
   const routeLabel = `${input.pickupLocation} -> ${input.dropoffLocation}`;
+  const fareJpy =
+    Number(input.baseJpy ?? 0) +
+    Number(input.urgentJpy ?? 0) +
+    Number(input.nightJpy ?? 0);
   const components: PricingComponent[] = [
     {
-      name: "Airport transfer base fare",
-      amountJpy: input.baseJpy,
+      name: "Airport transfer fare",
+      amountJpy: fareJpy,
       description: `${routeLabel} | ${pickupDate} JST`,
     },
   ];
 
-  if (input.nightJpy > 0) {
-    components.push({ name: "Night service surcharge", amountJpy: input.nightJpy });
-  }
-  if (input.urgentJpy > 0) {
-    components.push({ name: "Urgent booking surcharge", amountJpy: input.urgentJpy });
-  }
   if (input.childSeatTotalJpy > 0) {
     components.push({
       name: "Child seat service",
       amountJpy: input.childSeatTotalJpy,
-      ...(input.childSeats > 0
-        ? {
-            description: `${input.childSeats} seat${input.childSeats === 1 ? "" : "s"}`,
-          }
-        : {}),
+      description: `${input.childSeats} ${input.childSeats === 1 ? "seat" : "seats"}`,
     });
   }
   if (input.meetAndGreetTotalJpy > 0) {

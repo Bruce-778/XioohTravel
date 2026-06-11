@@ -11,37 +11,37 @@ const VEHICLES = [
     vehicleKey: "5seats",
     nameKey: "vehicle.5seats",
     descKey: "vehicle.desc.5seats",
-    luggage: [2, 1, 1],
+    luggage: [2, 1],
   },
   {
     vehicleKey: "7seats",
     nameKey: "vehicle.7seats",
     descKey: "vehicle.desc.7seats",
-    luggage: [4, 3, 2],
+    luggage: [4, 3],
   },
   {
     vehicleKey: "9seats",
     nameKey: "vehicle.9seats",
     descKey: "vehicle.desc.9seats",
-    luggage: [6, 4, 3],
+    luggage: [6, 4],
   },
   {
     vehicleKey: "luxury",
     nameKey: "vehicle.luxury",
     descKey: "vehicle.desc.luxury",
-    luggage: [3, 2, 2],
+    luggage: [3, 2],
   },
   {
     vehicleKey: "bus",
     nameKey: "vehicle.bus",
     descKey: "vehicle.desc.bus",
-    luggage: [20, 20, 20],
+    luggage: [20, 20],
   },
 ] satisfies Array<{
   vehicleKey: VehicleImageKey;
   nameKey: string;
   descKey: string;
-  luggage: [number, number, number];
+  luggage: [number, number];
 }>;
 
 export async function VehicleGuidePage() {
@@ -49,10 +49,8 @@ export async function VehicleGuidePage() {
   const luggageLabels: LuggageDisplayLabels = {
     carryOn: t("luggage.carryOn"),
     mediumSuitcase: t("luggage.mediumSuitcase"),
-    largeSuitcase: t("luggage.largeSuitcase"),
     carryOnSize: t("luggage.carryOnSize"),
     mediumSize: t("luggage.mediumSize"),
-    largeSize: t("luggage.largeSize"),
   };
 
   return (
@@ -101,7 +99,6 @@ export async function VehicleGuidePage() {
                     <LuggageCapacityDisplay
                       small={vehicle.luggage[0]}
                       medium={vehicle.luggage[1]}
-                      large={vehicle.luggage[2]}
                       labels={luggageLabels}
                       variant="stacked"
                       className="mt-3"

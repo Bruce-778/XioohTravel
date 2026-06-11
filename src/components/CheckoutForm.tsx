@@ -3,10 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatMoneyFromJpy } from "@/lib/currencyClient";
 import type { Currency } from "@/lib/currency";
-import {
-  CHILD_SEAT_FEE_JPY,
-  MEET_AND_GREET_SIGN_FEE_JPY,
-} from "@/lib/bookingRules";
+import { CHILD_SEAT_FEE_JPY, MEET_AND_GREET_SIGN_FEE_JPY } from "@/lib/bookingRules";
 import {
   PHONE_COUNTRY_CODE_OPTIONS,
   getCompactPhoneCountryLabel,
@@ -27,10 +24,9 @@ type Preset = {
   toArea: string;
   pickupTime: string;
   passengers: number;
-  childSeats: number;
+  children: number;
   luggageSmall: number;
   luggageMedium: number;
-  luggageLarge: number;
   vehicleTypeId: string;
   defaultPickupLocation: string;
   defaultDropoffLocation: string;
@@ -42,8 +38,6 @@ type Summary = {
   displayVehicle: string;
   currency: Currency;
   baseJpy: number;
-  nightJpy: number;
-  urgentJpy: number;
 };
 
 type Labels = {
@@ -62,13 +56,14 @@ type Labels = {
   tripType: string;
   pickupTime: string;
   passengers: string;
+  children: string;
   vehicle: string;
   basePrice: string;
-  nightFee: string;
-  urgentFee: string;
   childSeatFee: string;
+  childSeatLimitHint: string;
   meetAndGreet: string;
   meetAndGreetFee: string;
+  meetAndGreetLimitHint: string;
   total: string;
   paymentCancelledTip: string;
   aboutDuration: string;
@@ -119,13 +114,7 @@ function Field({
   );
 }
 
-function FormSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="border-b border-slate-100 pb-3">
@@ -148,6 +137,80 @@ function SummaryRow({
       <span className="text-slate-500">{label}</span>
       <span className="text-right font-medium text-slate-900 break-words">{value}</span>
     </div>
+  );
+}
+
+function AddOnQuantityCard({
+  label,
+  priceText,
+  icon,
+  value,
+  max,
+  limitHint,
+  onChange,
+}: {
+  label: string;
+  priceText: string;
+  icon: React.ReactNode;
+  value: number;
+  max: number;
+  limitHint: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="shrink-0 text-brand-600">
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-900">{label}</div>
+            <div className="mt-0.5 text-xs text-slate-500">{priceText}</div>
+          </div>
+        </div>
+        <input
+          type="number"
+          min={0}
+          max={max}
+          step={1}
+          value={value}
+          onChange={(event) => {
+            const next = Number(event.target.value);
+            if (!Number.isFinite(next)) {
+              onChange(0);
+              return;
+            }
+            onChange(Math.min(max, Math.max(0, Math.trunc(next))));
+          }}
+          aria-label={label}
+          className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 bg-white px-1 text-center text-sm font-bold text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+        />
+      </label>
+      {value >= max ? (
+        <div className="text-xs font-medium text-amber-700">{limitHint}</div>
+      ) : null}
+    </div>
+  );
+}
+
+function ChildSeatIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7.5a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6.5 20v-4.5a4 4 0 0 1 4-4h0a4 4 0 0 1 4 4V20" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 20h10.5a2.5 2.5 0 0 0 2.5-2.5V5" />
+    </svg>
+  );
+}
+
+function MeetAndGreetIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 4.5h10A2.5 2.5 0 0 1 19.5 7v10a2.5 2.5 0 0 1-2.5 2.5H7A2.5 2.5 0 0 1 4.5 17V7A2.5 2.5 0 0 1 7 4.5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 9h8M8 13h5" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10 4.5V3m4 1.5V3" />
+    </svg>
   );
 }
 
@@ -259,12 +322,6 @@ function ReadOnlyLocationField({
   );
 }
 
-function clampCount(value: string, max: number) {
-  const nextValue = Number(value);
-  if (Number.isNaN(nextValue)) return 0;
-  return Math.max(0, Math.min(max, Math.trunc(nextValue)));
-}
-
 function getPhoneDigits(value: string) {
   return value.replace(/\D/g, "");
 }
@@ -284,7 +341,8 @@ type CheckoutDraft = {
   contactEmail: string;
   contactNote: string;
   childSeats: number;
-  meetAndGreetSign: boolean;
+  meetAndGreetSignCount: number;
+  meetAndGreetSign?: boolean;
 };
 
 type RouteEstimate = {
@@ -427,8 +485,8 @@ export function CheckoutForm({
   const [phoneLocalNumber, setPhoneLocalNumber] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactNote, setContactNote] = useState("");
-  const [childSeats, setChildSeats] = useState(preset.childSeats);
-  const [meetAndGreetSign, setMeetAndGreetSign] = useState(false);
+  const [childSeats, setChildSeats] = useState(0);
+  const [meetAndGreetSignCount, setMeetAndGreetSignCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPaymentCancelledReturn, setIsPaymentCancelledReturn] = useState(false);
@@ -518,10 +576,12 @@ export function CheckoutForm({
       if (typeof draft.contactEmail === "string") setContactEmail(draft.contactEmail);
       if (typeof draft.contactNote === "string") setContactNote(draft.contactNote);
       if (typeof draft.childSeats === "number") {
-        setChildSeats(Math.max(0, Math.min(10, Math.trunc(draft.childSeats))));
+        setChildSeats(Math.min(2, Math.max(0, Math.trunc(draft.childSeats))));
       }
-      if (typeof draft.meetAndGreetSign === "boolean") {
-        setMeetAndGreetSign(draft.meetAndGreetSign);
+      if (typeof draft.meetAndGreetSignCount === "number") {
+        setMeetAndGreetSignCount(Math.min(1, Math.max(0, Math.trunc(draft.meetAndGreetSignCount))));
+      } else if (typeof draft.meetAndGreetSign === "boolean") {
+        setMeetAndGreetSignCount(draft.meetAndGreetSign ? 1 : 0);
       }
     } catch {
       // A corrupted local draft should never block checkout.
@@ -592,11 +652,9 @@ export function CheckoutForm({
 
   const pricing = useMemo(() => {
     const childSeatJpy = childSeats * CHILD_SEAT_FEE_JPY;
-    const meetAndGreetJpy = meetAndGreetSign ? MEET_AND_GREET_SIGN_FEE_JPY : 0;
+    const meetAndGreetJpy = meetAndGreetSignCount * MEET_AND_GREET_SIGN_FEE_JPY;
     const totalJpy =
       summary.baseJpy +
-      summary.nightJpy +
-      summary.urgentJpy +
       childSeatJpy +
       meetAndGreetJpy;
 
@@ -605,7 +663,7 @@ export function CheckoutForm({
       meetAndGreetJpy,
       totalJpy,
     };
-  }, [childSeats, meetAndGreetSign, summary.baseJpy, summary.nightJpy, summary.urgentJpy]);
+  }, [childSeats, meetAndGreetSignCount, summary.baseJpy]);
 
   const payload = useMemo(
     () => ({
@@ -616,11 +674,11 @@ export function CheckoutForm({
       pickupLocation,
       dropoffLocation,
       passengers: preset.passengers,
+      children: preset.children ?? 0,
       childSeats,
-      meetAndGreetSign,
+      meetAndGreetSign: meetAndGreetSignCount > 0,
       luggageSmall: preset.luggageSmall,
       luggageMedium: preset.luggageMedium,
-      luggageLarge: preset.luggageLarge,
       vehicleTypeId: preset.vehicleTypeId,
       flightNumber: normalizedFlightNumber || undefined,
       contactName: contactName.trim(),
@@ -634,14 +692,14 @@ export function CheckoutForm({
       preset.toArea,
       preset.pickupTime,
       preset.passengers,
+      preset.children,
       preset.luggageSmall,
       preset.luggageMedium,
-      preset.luggageLarge,
       preset.vehicleTypeId,
       pickupLocation,
       dropoffLocation,
       childSeats,
-      meetAndGreetSign,
+      meetAndGreetSignCount,
       normalizedFlightNumber,
       contactName,
       phoneCountryCode,
@@ -678,7 +736,7 @@ export function CheckoutForm({
         contactEmail,
         contactNote,
         childSeats,
-        meetAndGreetSign,
+        meetAndGreetSignCount,
       };
 
       window.sessionStorage.setItem(getCheckoutDraftStorageKey(bookingId), JSON.stringify(draft));
@@ -796,44 +854,31 @@ export function CheckoutForm({
         </FormSection>
 
         <FormSection title={labels.addOns}>
-          <Field label={labels.childSeatFee}>
-            <div className="space-y-2">
-              <input
-                type="number"
-                min={0}
-                max={10}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                value={childSeats}
-                onChange={(e) => {
-                  clearError();
-                  setChildSeats(clampCount(e.target.value, 10));
-                }}
-              />
-              <div className="text-xs text-slate-500">
-                {formatMoneyFromJpy(CHILD_SEAT_FEE_JPY, "JPY", locale)} / {labels.perSeat}
-              </div>
-            </div>
-          </Field>
-
-          <div className="text-sm block">
-            <div className="mb-1.5 font-semibold text-slate-900">{labels.meetAndGreet}</div>
-            <label className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-              <div>
-                <div className="font-medium text-slate-900">{labels.meetAndGreetFee}</div>
-                <div className="mt-1 text-xs text-slate-500">
-                  {formatMoneyFromJpy(MEET_AND_GREET_SIGN_FEE_JPY, "JPY", locale)} / {labels.perOrder}
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={meetAndGreetSign}
-                onChange={(e) => {
-                  clearError();
-                  setMeetAndGreetSign(e.target.checked);
-                }}
-                className="h-5 w-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-              />
-            </label>
+          <div className="grid gap-3 md:grid-cols-2">
+            <AddOnQuantityCard
+              label={labels.childSeatFee}
+              priceText={`${formatMoneyFromJpy(CHILD_SEAT_FEE_JPY, summary.currency, locale)} / ${labels.perSeat}`}
+              icon={<ChildSeatIcon />}
+              value={childSeats}
+              max={2}
+              limitHint={labels.childSeatLimitHint}
+              onChange={(value) => {
+                clearError();
+                setChildSeats(value);
+              }}
+            />
+            <AddOnQuantityCard
+              label={labels.meetAndGreetFee}
+              priceText={`${formatMoneyFromJpy(MEET_AND_GREET_SIGN_FEE_JPY, summary.currency, locale)} / ${labels.perOrder}`}
+              icon={<MeetAndGreetIcon />}
+              value={meetAndGreetSignCount}
+              max={1}
+              limitHint={labels.meetAndGreetLimitHint}
+              onChange={(value) => {
+                clearError();
+                setMeetAndGreetSignCount(value);
+              }}
+            />
           </div>
         </FormSection>
 
@@ -1010,6 +1055,7 @@ export function CheckoutForm({
               <div className="space-y-3 border-t border-slate-100 pt-4">
                 <SummaryRow label={labels.tripType} value={summary.displayTripType} />
                 <SummaryRow label={labels.passengers} value={String(preset.passengers)} />
+                <SummaryRow label={labels.children} value={String(preset.children ?? 0)} />
                 <SummaryRow label={labels.vehicle} value={summary.displayVehicle} />
               </div>
             </div>
@@ -1047,26 +1093,7 @@ export function CheckoutForm({
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">{labels.nightFee}</span>
-                  <span className="text-slate-900">
-                    {summary.nightJpy > 0
-                      ? `+${formatMoneyFromJpy(summary.nightJpy, summary.currency, locale)}`
-                      : formatMoneyFromJpy(0, summary.currency, locale)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">{labels.urgentFee}</span>
-                  <span className="text-slate-900">
-                    {summary.urgentJpy > 0
-                      ? `+${formatMoneyFromJpy(summary.urgentJpy, summary.currency, locale)}`
-                      : formatMoneyFromJpy(0, summary.currency, locale)}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">
-                    {labels.childSeatFee}
-                    {childSeats > 0 ? ` (${childSeats})` : ""}
-                  </span>
+                  <span className="text-slate-500">{labels.childSeatFee}</span>
                   <span className="text-slate-900">
                     {pricing.childSeatJpy > 0
                       ? `+${formatMoneyFromJpy(pricing.childSeatJpy, summary.currency, locale)}`

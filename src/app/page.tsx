@@ -110,13 +110,13 @@ export default async function HomePage() {
               <div className="flex flex-wrap gap-3">
                 <AuthLink
                   className="group px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:border-brand-300 hover:text-brand-600 shadow-sm transition-all duration-200"
-                  href="/vehicles?tripType=PICKUP&fromArea=NRT&toArea=Shinjuku&pickupTime=2026-02-01T10:00&passengers=2&luggageSmall=1&luggageMedium=0&luggageLarge=0"
+                  href="/vehicles?tripType=PICKUP&fromArea=NRT&toArea=Shinjuku&pickupTime=2026-02-01T10:00&passengers=2&children=0&luggageSmall=1&luggageMedium=0"
                 >
                   {t("home.route.naritaShinjuku")}
                 </AuthLink>
                 <AuthLink
                   className="group px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:border-brand-300 hover:text-brand-600 shadow-sm transition-all duration-200"
-                  href="/vehicles?tripType=PICKUP&fromArea=HND&toArea=Shibuya&pickupTime=2026-02-01T22:30&passengers=3&luggageSmall=1&luggageMedium=1&luggageLarge=0"
+                  href="/vehicles?tripType=PICKUP&fromArea=HND&toArea=Shibuya&pickupTime=2026-02-01T22:30&passengers=3&children=0&luggageSmall=1&luggageMedium=1"
                 >
                   {t("home.route.hanedaShibuya")}
                 </AuthLink>
@@ -150,11 +150,12 @@ export default async function HomePage() {
                     to: t("search.to"),
                     pickupTime: t("search.pickupTime"),
                     passengers: t("search.passengers"),
-                    childSeats: t("search.childSeats"),
+                    children: t("search.children"),
                     luggageSmall: t("search.luggageSmall"),
                     luggageMedium: t("search.luggageMedium"),
-                    luggageLarge: t("search.luggageLarge"),
                     submit: t("search.submit"),
+                    bookingLeadTimeError: t("form.error.bookingLeadTime"),
+                    pickupTooSoonError: t("form.error.pickupTooSoon"),
                     timezoneHint: t("search.timezoneHint"),
                     fromAirport: t("search.fromAirport"),
                     fromLocation: t("search.fromLocation"),

@@ -1,18 +1,15 @@
-export type LuggageKind = "small" | "medium" | "large";
+export type LuggageKind = "small" | "medium";
 
 export type LuggageDisplayLabels = {
   carryOn: string;
   mediumSuitcase: string;
-  largeSuitcase: string;
   carryOnSize: string;
   mediumSize: string;
-  largeSize: string;
 };
 
 type LuggageCapacityDisplayProps = {
   small: number;
   medium: number;
-  large: number;
   labels: LuggageDisplayLabels;
   variant?: "inline" | "stacked";
   showSizes?: boolean;
@@ -41,11 +38,6 @@ function getLuggageItems(labels: LuggageDisplayLabels) {
       label: labels.mediumSuitcase,
       size: labels.mediumSize,
     },
-    {
-      key: "large" as const,
-      label: labels.largeSuitcase,
-      size: labels.largeSize,
-    },
   ];
 }
 
@@ -63,19 +55,9 @@ export function LuggageIcon({ kind, className }: { kind: LuggageKind; className?
 
   return (
     <svg className={cn("h-4 w-4", className)} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      {kind === "medium" ? (
-        <>
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6V4a2 2 0 012-2h2a2 2 0 012 2v2" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 6h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h6M9 14h6M9 20v2M15 20v2" />
-        </>
-      ) : (
-        <>
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5V3a2 2 0 012-2h4a2 2 0 012 2v2" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5h14a2 2 0 012 2v13a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h8M8 14h8M8 18h8M7 22v1M17 22v1" />
-        </>
-      )}
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6V4a2 2 0 012-2h2a2 2 0 012 2v2" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 6h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V8a2 2 0 012-2z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10h6M9 14h6M9 20v2M15 20v2" />
     </svg>
   );
 }
@@ -83,7 +65,6 @@ export function LuggageIcon({ kind, className }: { kind: LuggageKind; className?
 export function LuggageCapacityDisplay({
   small,
   medium,
-  large,
   labels,
   variant = "inline",
   showSizes = false,
@@ -92,7 +73,6 @@ export function LuggageCapacityDisplay({
   const counts = {
     small,
     medium,
-    large,
   };
   const items = getLuggageItems(labels);
 
@@ -143,7 +123,7 @@ export function LuggageSizeGuide({ labels, title, className }: LuggageSizeGuideP
   return (
     <div className={cn("rounded-3xl border border-brand-100 bg-white/80 p-4 shadow-sm shadow-blue-100/40", className)}>
       <div className="text-xs font-black uppercase tracking-[0.18em] text-brand-600">{title}</div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
         {getLuggageItems(labels).map((item) => (
           <div key={item.key} className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50/70 px-3 py-3">
             <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-brand-700 shadow-sm ring-1 ring-brand-100">

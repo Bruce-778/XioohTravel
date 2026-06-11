@@ -28,6 +28,7 @@ export type PaymentConfirmationBooking = {
   contact_phone: string;
   contact_email: string;
   contact_note: string | null;
+  pricing_child_seat_jpy: number;
   pricing_meet_and_greet_jpy: number;
   pricing_total_jpy: number;
   stripe_payment_intent_id: string | null;
@@ -231,7 +232,6 @@ function buildLuggageSummary(booking: PaymentConfirmationBooking) {
   return [
     `${booking.luggage_small} small`,
     `${booking.luggage_medium} medium`,
-    `${booking.luggage_large} large`,
   ].join(" / ");
 }
 
@@ -557,6 +557,13 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
       renderRow("Meet-and-greet fee", formatCurrencyJpy(Number(booking.pricing_meet_and_greet_jpy ?? 0)))
     );
   }
+  if (Number(booking.pricing_child_seat_jpy ?? 0) > 0) {
+    details.splice(
+      14,
+      0,
+      renderRow("Child seat fee", formatCurrencyJpy(Number(booking.pricing_child_seat_jpy ?? 0)))
+    );
+  }
 
   if (usingTestSender && testRecipient) {
     details.splice(
@@ -645,6 +652,9 @@ export async function sendBookingPaymentConfirmationEmail(booking: PaymentConfir
     `Passengers: ${booking.passengers}`,
     `Child seats: ${booking.child_seats}`,
     `Meet-and-greet sign: ${booking.meet_and_greet_sign ? "Yes" : "No"}`,
+    Number(booking.pricing_child_seat_jpy ?? 0) > 0
+      ? `Child seat fee: ${formatCurrencyJpy(Number(booking.pricing_child_seat_jpy ?? 0))}`
+      : null,
     Number(booking.pricing_meet_and_greet_jpy ?? 0) > 0
       ? `Meet-and-greet fee: ${formatCurrencyJpy(Number(booking.pricing_meet_and_greet_jpy ?? 0))}`
       : null,

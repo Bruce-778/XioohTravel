@@ -18,19 +18,71 @@ const OptionalFlightNumberSchema = z.preprocess(
     })
 );
 
-export const SearchSchema = z.object({
+const ChildCountSchema = z.coerce.number().int().min(0).max(10);
+const ChildSeatCountSchema = z.coerce.number().int().min(0).max(2);
+const LuggageCountSchema = z.coerce.number().int().min(0).max(20);
+
+function getChildrenCount(data: { children?: number }) {
+  return data.children ?? 0;
+}
+
+function addPassengerChildAndLuggageIssues(
+  data: { passengers: number; children?: number; luggageLarge?: number },
+  ctx: z.RefinementCtx
+) {
+  const children = getChildrenCount(data);
+
+  if (children > data.passengers) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Children cannot exceed passengers",
+      path: ["children"],
+    });
+  }
+
+  if ((data.luggageLarge ?? 0) > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Large luggage is no longer supported",
+      path: ["luggageLarge"],
+    });
+  }
+}
+
+function normalizeChildrenAndLuggage<T extends { children?: number; luggageLarge?: number }>(
+  data: T
+) {
+  const children = getChildrenCount(data);
+  return {
+    ...data,
+    children,
+    luggageLarge: 0,
+  };
+}
+
+const SearchBaseSchema = z.object({
   tripType: z.enum(["PICKUP", "DROPOFF", "POINT_TO_POINT"]),
   fromArea: z.string().min(2),
   toArea: z.string().min(2),
   pickupTime: z.string().min(1),
   passengers: z.coerce.number().int().min(1).max(50),
-  childSeats: z.coerce.number().int().min(0).max(10).default(0),
-  luggageSmall: z.coerce.number().int().min(0).max(20).default(0),
-  luggageMedium: z.coerce.number().int().min(0).max(20).default(0),
-  luggageLarge: z.coerce.number().int().min(0).max(20).default(0)
+  children: ChildCountSchema.optional(),
+  luggageSmall: LuggageCountSchema.default(0),
+  luggageMedium: LuggageCountSchema.default(0),
+  luggageLarge: LuggageCountSchema.default(0)
 });
 
-export const CreateBookingSchema = z.object({
+export const SearchSchema = SearchBaseSchema
+  .superRefine(addPassengerChildAndLuggageIssues)
+  .transform(normalizeChildrenAndLuggage);
+
+export const CheckoutSearchSchema = SearchBaseSchema.extend({
+  vehicleTypeId: z.string().min(5),
+})
+  .superRefine(addPassengerChildAndLuggageIssues)
+  .transform(normalizeChildrenAndLuggage);
+
+const CreateBookingBaseSchema = z.object({
   tripType: z.enum(["PICKUP", "DROPOFF", "POINT_TO_POINT"]),
   fromArea: z.string().min(2),
   toArea: z.string().min(2),
@@ -38,11 +90,12 @@ export const CreateBookingSchema = z.object({
   pickupLocation: z.string().min(2),
   dropoffLocation: z.string().min(2),
   passengers: z.coerce.number().int().min(1).max(50),
-  childSeats: z.coerce.number().int().min(0).max(10).default(0),
+  children: ChildCountSchema.optional(),
+  childSeats: ChildSeatCountSchema.default(0),
   meetAndGreetSign: z.coerce.boolean().default(false),
-  luggageSmall: z.coerce.number().int().min(0).max(20).default(0),
-  luggageMedium: z.coerce.number().int().min(0).max(20).default(0),
-  luggageLarge: z.coerce.number().int().min(0).max(20).default(0),
+  luggageSmall: LuggageCountSchema.default(0),
+  luggageMedium: LuggageCountSchema.default(0),
+  luggageLarge: LuggageCountSchema.default(0),
   vehicleTypeId: z.string().min(5),
   flightNumber: OptionalFlightNumberSchema,
   flightNote: z.string().optional(),
@@ -50,15 +103,21 @@ export const CreateBookingSchema = z.object({
   contactPhone: z.string().min(5),
   contactEmail: z.string().email(),
   contactNote: z.string().optional()
-}).refine((data) => {
-  if (data.tripType === "PICKUP" && (!data.flightNumber || data.flightNumber.trim() === "")) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Flight number is required for pickup",
-  path: ["flightNumber"]
 });
+
+export const CreateBookingSchema = CreateBookingBaseSchema
+  .superRefine((data, ctx) => {
+    addPassengerChildAndLuggageIssues(data, ctx);
+
+    if (data.tripType === "PICKUP" && (!data.flightNumber || data.flightNumber.trim() === "")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Flight number is required for pickup",
+        path: ["flightNumber"],
+      });
+    }
+  })
+  .transform(normalizeChildrenAndLuggage);
 
 export const RetryPaymentSchema = z.object({
   bookingId: z.string().min(5),

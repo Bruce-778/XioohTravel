@@ -4,9 +4,10 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { normalizeEmailAddress } from "@/lib/email";
 import {
+  canCreateBooking,
+  CHILD_SEAT_FEE_JPY,
   computeNightFee,
   isUrgentOrder,
-  CHILD_SEAT_FEE_JPY,
   MEET_AND_GREET_SIGN_FEE_JPY,
 } from "@/lib/bookingRules";
 import { getEffectivePricingRule } from "@/lib/effectivePricing";
@@ -102,6 +103,10 @@ function parseStripeMetadataInteger(value: string | undefined) {
 export async function calculateBookingSnapshot(data: CreateBookingInput) {
   const pickupTime = parseJstDateTime(data.pickupTime);
   const now = new Date();
+  if (!canCreateBooking(now, pickupTime)) {
+    throw new BookingError("Pickup time is too soon", "api.bookingLeadTime", 400);
+  }
+
   const isUrgent = isUrgentOrder(now, pickupTime);
   const isNight = computeNightFee(pickupTime);
 
@@ -133,8 +138,7 @@ export async function calculateBookingSnapshot(data: CreateBookingInput) {
 
   if (
     data.luggageSmall > vehicle.luggage_small ||
-    data.luggageMedium > vehicle.luggage_medium ||
-    data.luggageLarge > vehicle.luggage_large
+    data.luggageMedium > vehicle.luggage_medium
   ) {
     throw new BookingError("Luggage exceeds capacity", "api.luggageExceeded", 400);
   }
@@ -142,7 +146,7 @@ export async function calculateBookingSnapshot(data: CreateBookingInput) {
   const base = Number(rule.basePriceJpy ?? 0);
   const night = isNight ? Number(rule.nightFeeJpy ?? 0) : 0;
   const urgent = isUrgent ? Number(rule.urgentFeeJpy ?? 0) : 0;
-  const childSeat = (data.childSeats || 0) * CHILD_SEAT_FEE_JPY;
+  const childSeat = Number(data.childSeats ?? 0) * CHILD_SEAT_FEE_JPY;
   const meetAndGreet = data.meetAndGreetSign ? MEET_AND_GREET_SIGN_FEE_JPY : 0;
   const total = base + night + urgent + childSeat + meetAndGreet;
 
@@ -197,7 +201,7 @@ export async function createPendingBooking(data: CreateBookingInput) {
           data.meetAndGreetSign,
           data.luggageSmall,
           data.luggageMedium,
-          data.luggageLarge,
+          0,
           data.contactName,
           data.contactPhone,
           data.contactEmail,

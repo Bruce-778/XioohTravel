@@ -22,6 +22,21 @@ export function parseJstDateTime(value: Date | string): Date {
   );
 }
 
+export function formatJstDateTimeLocalValue(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: "Asia/Tokyo",
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${byType.year}-${byType.month}-${byType.day}T${byType.hour}:${byType.minute}`;
+}
+
 export function formatDateTimeJST(date: Date | string, locale: string = "zh-CN"): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const isZh = locale.startsWith("zh");

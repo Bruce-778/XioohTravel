@@ -2432,13 +2432,6 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                       {labels.addRule}
                     </button>
 
-                    <button
-                      onClick={() => openCreatePricingOverride()}
-                      disabled={pricingLoading || importLoading || pricingSaving}
-                      className={pricingToolbarPrimaryButtonClass}
-                    >
-                      {labels.addOverride}
-                    </button>
                   </div>
                 </div>
               </div>

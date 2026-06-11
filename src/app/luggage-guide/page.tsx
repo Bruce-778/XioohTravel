@@ -16,19 +16,13 @@ export default async function LuggageGuidePage() {
       kind: "small",
       name: t("luggage.carryOn"),
       size: t("luggage.carryOnSize"),
-      imageSrc: "/luggage/carry-on.png",
+      imageSrc: "/luggage/small-suitcase-18inch.png",
     },
     {
       kind: "medium",
       name: t("luggage.mediumSuitcase"),
       size: t("luggage.mediumSize"),
-      imageSrc: "/luggage/medium-suitcase.png",
-    },
-    {
-      kind: "large",
-      name: t("luggage.largeSuitcase"),
-      size: t("luggage.largeSize"),
-      imageSrc: "/luggage/large-suitcase.png",
+      imageSrc: "/luggage/medium-suitcase-24inch.png",
     },
   ];
 
@@ -47,7 +41,7 @@ export default async function LuggageGuidePage() {
           </p>
         </div>
 
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
+        <div className="mx-auto mt-10 grid max-w-4xl gap-5 md:grid-cols-2">
           {items.map((item) => (
             <article
               key={item.kind}

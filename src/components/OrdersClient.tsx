@@ -87,7 +87,7 @@ type Labels = {
   cancelConfirm: string;
   close: string;
   processing: string;
-  urgentHint: string;
+  cancelRuleHint: string;
   queryFailed: string;
   cancelFailed: string;
   id: string;
@@ -96,7 +96,6 @@ type Labels = {
   amount: string;
   status: string;
   action: string;
-  urgentTag: string;
   cancelReasonDefault: string;
   statuses: Record<string, string>;
   vehicles: Record<string, string>;
@@ -111,7 +110,6 @@ type Labels = {
   retryingPayment: string;
   emailRequired: string;
   guestLookupHint: string;
-  pendingPaymentHint: string;
   activeBookings: string;
   noActiveBookings: string;
   cancelledArchive: string;
@@ -134,15 +132,12 @@ type Labels = {
   meetAndGreet: string;
   luggageSmall: string;
   luggageMedium: string;
-  luggageLarge: string;
   contactName: string;
   contactPhone: string;
   contactEmail: string;
   contactNote: string;
   pricingBase: string;
   pricingNight: string;
-  pricingUrgent: string;
-  pricingChildSeat: string;
   pricingMeetAndGreet: string;
   pricingManualAdjustment: string;
   pricingNote: string;
@@ -467,6 +462,7 @@ export function OrdersClient({
         row.status !== "PENDING_PAYMENT" &&
         (row.isUrgent || isInsidePaidCancellationLock);
       const isExpanded = expandedBookingId === row.id;
+      const displayFareJpy = row.pricingBaseJpy + row.pricingUrgentJpy + row.pricingNightJpy;
 
       const summaryRow = (
         <tr key={`${row.id}-summary`} className="hover:bg-slate-50/50 transition-colors">
@@ -485,11 +481,6 @@ export function OrdersClient({
               }`}>
                 {displayStatus}
               </span>
-              {row.isUrgent ? (
-                <span className="text-[10px] font-bold text-rose-500 uppercase tracking-tight px-1">
-                  {labels.urgentTag}
-                </span>
-              ) : null}
             </div>
           </td>
           <td className="px-6 py-4">
@@ -512,7 +503,7 @@ export function OrdersClient({
               {!archive ? (
                 canRequestCancel ? (
                   isCancelBlockedByUrgency ? (
-                    <span className="text-xs text-slate-400 cursor-help" title={labels.urgentHint}>
+                    <span className="text-xs text-slate-400 cursor-help" title={labels.cancelRuleHint}>
                       {labels.cancel}
                     </span>
                   ) : (
@@ -597,13 +588,9 @@ export function OrdersClient({
                       <dd className="font-medium text-slate-900 text-right">{row.luggageMedium}</dd>
                     </div>
                     <div className="flex justify-between gap-4">
-                      <dt className="text-slate-500">{labels.luggageLarge}</dt>
-                      <dd className="font-medium text-slate-900 text-right">{row.luggageLarge}</dd>
-                    </div>
-                    <div className="flex justify-between gap-4">
                       <dt className="text-slate-500">{labels.status}</dt>
                       <dd className="font-medium text-slate-900 text-right">
-                        {displayStatus}{row.isUrgent ? ` · ${labels.urgentTag}` : ""}
+                        {displayStatus}
                       </dd>
                     </div>
                   </dl>
@@ -638,18 +625,10 @@ export function OrdersClient({
                   <dl className="space-y-2 text-sm">
                     <div className="flex justify-between gap-4">
                       <dt className="text-slate-500">{labels.pricingBase}</dt>
-                      <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingBaseJpy, currency, locale)}</dd>
+                      <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(displayFareJpy, currency, locale)}</dd>
                     </div>
                     <div className="flex justify-between gap-4">
-                      <dt className="text-slate-500">{labels.pricingNight}</dt>
-                      <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingNightJpy, currency, locale)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-slate-500">{labels.pricingUrgent}</dt>
-                      <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingUrgentJpy, currency, locale)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-slate-500">{labels.pricingChildSeat}</dt>
+                      <dt className="text-slate-500">{labels.childSeats}</dt>
                       <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingChildSeatJpy, currency, locale)}</dd>
                     </div>
                     <div className="flex justify-between gap-4">
@@ -878,6 +857,7 @@ export function OrdersClient({
                       row.status !== "PENDING_PAYMENT" &&
                       (row.isUrgent || isInsidePaidCancellationLock);
                     const isExpanded = expandedBookingId === row.id;
+                    const displayFareJpy = row.pricingBaseJpy + row.pricingUrgentJpy + row.pricingNightJpy;
 
                     const summaryRow = (
                       <tr key={`${row.id}-summary`} className="hover:bg-slate-50/50 transition-colors">
@@ -896,11 +876,6 @@ export function OrdersClient({
                             }`}>
                               {displayStatus}
                             </span>
-                            {row.isUrgent ? (
-                              <span className="text-[10px] font-bold text-rose-500 uppercase tracking-tight px-1">
-                                {labels.urgentTag}
-                              </span>
-                            ) : null}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -922,7 +897,7 @@ export function OrdersClient({
                             ) : null}
                             {canRequestCancel ? (
                               isCancelBlockedByUrgency ? (
-                                <span className="text-xs text-slate-400 cursor-help" title={labels.urgentHint}>
+                                <span className="text-xs text-slate-400 cursor-help" title={labels.cancelRuleHint}>
                                   {labels.cancel}
                                 </span>
                               ) : (
@@ -1006,13 +981,9 @@ export function OrdersClient({
                                     <dd className="font-medium text-slate-900 text-right">{row.luggageMedium}</dd>
                                   </div>
                                   <div className="flex justify-between gap-4">
-                                    <dt className="text-slate-500">{labels.luggageLarge}</dt>
-                                    <dd className="font-medium text-slate-900 text-right">{row.luggageLarge}</dd>
-                                  </div>
-                                  <div className="flex justify-between gap-4">
                                     <dt className="text-slate-500">{labels.status}</dt>
                                     <dd className="font-medium text-slate-900 text-right">
-                                      {displayStatus}{row.isUrgent ? ` · ${labels.urgentTag}` : ""}
+                                      {displayStatus}
                                     </dd>
                                   </div>
                                 </dl>
@@ -1047,18 +1018,10 @@ export function OrdersClient({
                                 <dl className="space-y-2 text-sm">
                                   <div className="flex justify-between gap-4">
                                     <dt className="text-slate-500">{labels.pricingBase}</dt>
-                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingBaseJpy, currency, locale)}</dd>
+                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(displayFareJpy, currency, locale)}</dd>
                                   </div>
                                   <div className="flex justify-between gap-4">
-                                    <dt className="text-slate-500">{labels.pricingNight}</dt>
-                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingNightJpy, currency, locale)}</dd>
-                                  </div>
-                                  <div className="flex justify-between gap-4">
-                                    <dt className="text-slate-500">{labels.pricingUrgent}</dt>
-                                    <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingUrgentJpy, currency, locale)}</dd>
-                                  </div>
-                                  <div className="flex justify-between gap-4">
-                                    <dt className="text-slate-500">{labels.pricingChildSeat}</dt>
+                                    <dt className="text-slate-500">{labels.childSeats}</dt>
                                     <dd className="font-medium text-slate-900 text-right">{formatMoneyFromJpy(row.pricingChildSeatJpy, currency, locale)}</dd>
                                   </div>
                                   <div className="flex justify-between gap-4">
@@ -1168,7 +1131,7 @@ export function OrdersClient({
               <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              {labels.pendingPaymentHint}
+              {labels.cancelRuleHint}
             </p>
           </div>
 
