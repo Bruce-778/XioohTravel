@@ -5,10 +5,16 @@ import { HomeFaqSection } from "@/components/HomeFaqSection";
 import { HomePromoGallery } from "@/components/HomePromoGallery";
 import { HomeTrustSection } from "@/components/HomeTrustSection";
 import { getT } from "@/lib/i18n";
+import { formatJstDateTimeLocalValue } from "@/lib/timeFormat";
 import coverpageImage from "../../coverpage.png";
 
 export default async function HomePage() {
   const { t, locale } = await getT();
+  // Quick-link pickup time: 3 days from now at 10:00 JST, always satisfying
+  // the 12-hour minimum booking lead time.
+  const defaultPickupTime = `${formatJstDateTimeLocalValue(
+    new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+  ).slice(0, 10)}T10:00`;
   const promoSlides = [
     {
       id: "tokyo",
@@ -110,13 +116,13 @@ export default async function HomePage() {
               <div className="flex flex-wrap gap-3">
                 <AuthLink
                   className="group px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:border-brand-300 hover:text-brand-600 shadow-sm transition-all duration-200"
-                  href="/vehicles?tripType=PICKUP&fromArea=NRT&toArea=Shinjuku&pickupTime=2026-02-01T10:00&passengers=2&children=0&luggageSmall=1&luggageMedium=0"
+                  href={`/vehicles?tripType=PICKUP&fromArea=NRT&toArea=Shinjuku&pickupTime=${defaultPickupTime}&passengers=2&children=0&luggageSmall=1&luggageMedium=0`}
                 >
                   {t("home.route.naritaShinjuku")}
                 </AuthLink>
                 <AuthLink
                   className="group px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 text-sm font-medium hover:border-brand-300 hover:text-brand-600 shadow-sm transition-all duration-200"
-                  href="/vehicles?tripType=PICKUP&fromArea=HND&toArea=Shibuya&pickupTime=2026-02-01T22:30&passengers=3&children=0&luggageSmall=1&luggageMedium=1"
+                  href={`/vehicles?tripType=PICKUP&fromArea=HND&toArea=Shibuya&pickupTime=${defaultPickupTime}&passengers=3&children=0&luggageSmall=1&luggageMedium=1`}
                 >
                   {t("home.route.hanedaShibuya")}
                 </AuthLink>

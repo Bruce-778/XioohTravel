@@ -182,19 +182,15 @@ type RefundPreview = {
 export function OrdersClient({
   labels,
   locale = "zh-CN",
-  initialEmail = "",
 }: {
   labels: Labels;
   locale?: string;
-  initialEmail?: string;
 }) {
   const [loading, setLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [currency, setCurrency] = useState<Currency>("JPY");
-  const [queryEmail, setQueryEmail] = useState(initialEmail);
-  const [hasSearched, setHasSearched] = useState(Boolean(initialEmail));
   const [expandedBookingId, setExpandedBookingId] = useState<string | null>(null);
   const [showCancelledArchive, setShowCancelledArchive] = useState(false);
   const { user } = useSession();
@@ -290,13 +286,8 @@ export function OrdersClient({
   useEffect(() => {
     if (user) {
       void loadAccountOrders();
-      return;
     }
-
-    if (initialEmail) {
-      void loadGuestOrders(initialEmail, { markSearched: true });
-    }
-  }, [user, initialEmail]);
+  }, [user]);
 
   async function loadAccountOrders() {
     setLoading(true);
@@ -313,36 +304,10 @@ export function OrdersClient({
     }
   }
 
-  async function loadGuestOrders(email: string, options?: { markSearched?: boolean }) {
-    const normalizedEmail = email.trim();
-    if (!normalizedEmail) {
-      setError(labels.emailRequired);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/orders?email=${encodeURIComponent(normalizedEmail)}`, {
-        cache: "no-store",
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error ?? labels.queryFailed);
-      setRows(data.rows ?? []);
-      setHasSearched(options?.markSearched ?? true);
-    } catch (e: any) {
-      setError(e?.message ?? labels.queryFailed);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function load() {
     if (user) {
       await loadAccountOrders();
-      return;
     }
-    await loadGuestOrders(queryEmail);
   }
 
   async function cancel() {
@@ -389,7 +354,6 @@ export function OrdersClient({
         signal: controller.signal,
         body: JSON.stringify({
           bookingId: row.id,
-          contactEmail: user ? undefined : row.contactEmail,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -461,7 +425,7 @@ export function OrdersClient({
       const isRetryable = row.status === "PENDING_PAYMENT";
       const msUntilPickup = new Date(row.pickupTime).getTime() - Date.now();
       const isInsidePaidCancellationLock =
-        Number.isFinite(msUntilPickup) && msUntilPickup <= 24 * 60 * 60 * 1000;
+        Number.isFinite(msUntilPickup) && msUntilPickup < 24 * 60 * 60 * 1000;
       const canRequestCancel = row.status !== "CANCELLED" && row.status !== "COMPLETED";
       const isCancelBlockedByUrgency =
         canRequestCancel &&
@@ -747,7 +711,7 @@ export function OrdersClient({
         .sort((a, b) => new Date(b.pickupTime).getTime() - new Date(a.pickupTime).getTime()),
     [rows]
   );
-  const showResults = Boolean(user) || hasSearched;
+  const showResults = Boolean(user);
   const cancelRequiresRefundPreview = cancelBooking ? cancelBooking.status !== "PENDING_PAYMENT" : false;
   const cancelConfirmDisabled =
     loading ||
@@ -773,35 +737,16 @@ export function OrdersClient({
             </button>
           </div>
         ) : (
-          <form
-            className="space-y-4"
-            onSubmit={async (event) => {
-              event.preventDefault();
-              await loadGuestOrders(queryEmail, { markSearched: true });
-            }}
-          >
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">{labels.queryTitle}</h3>
-              <p className="text-sm text-slate-500 mt-0.5">{labels.querySubtitle}</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="email"
-                value={queryEmail}
-                onChange={(event) => setQueryEmail(event.target.value)}
-                placeholder={labels.email}
-                className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 bg-white"
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-5 py-3 rounded-2xl bg-slate-900 text-white font-semibold hover:bg-slate-800 disabled:opacity-60"
-              >
-                {loading ? labels.searching : labels.search}
-              </button>
-            </div>
-            <p className="text-xs text-slate-500">{labels.guestLookupHint}</p>
-          </form>
+          <div className="flex flex-col items-center gap-3 py-6 text-center">
+            <h3 className="text-lg font-bold text-slate-900">{labels.loginRequired}</h3>
+            <p className="text-sm text-slate-500 max-w-md">{labels.loginDesc}</p>
+            <a
+              href="/login?next=%2Forders"
+              className="mt-1 px-6 py-3 rounded-2xl bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors"
+            >
+              {labels.loginButton}
+            </a>
+          </div>
         )}
       </div>
 
@@ -856,7 +801,7 @@ export function OrdersClient({
                     const isRetryable = row.status === "PENDING_PAYMENT";
                     const msUntilPickup = new Date(row.pickupTime).getTime() - Date.now();
                     const isInsidePaidCancellationLock =
-                      Number.isFinite(msUntilPickup) && msUntilPickup <= 24 * 60 * 60 * 1000;
+                      Number.isFinite(msUntilPickup) && msUntilPickup < 24 * 60 * 60 * 1000;
                     const canRequestCancel = row.status !== "CANCELLED" && row.status !== "COMPLETED";
                     const isCancelBlockedByUrgency =
                       canRequestCancel &&

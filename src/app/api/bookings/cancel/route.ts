@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/auth";
+import { getUserAccessibleEmails, syncBookingPaymentFromCheckoutSession } from "@/lib/bookings";
 import { db } from "@/lib/db";
 import { CancelBookingSchema } from "@/lib/validators";
 import { getT } from "@/lib/i18n";
@@ -12,7 +14,7 @@ import {
   RefundPaymentMissingError,
 } from "@/lib/refundAmounts";
 import { sendRefundConfirmationEmailIfNeeded } from "@/lib/refundConfirmation";
-import { createBookingRefund } from "@/lib/stripe";
+import { createBookingRefund, expireCheckoutSessionSafely, retrieveCheckoutSession } from "@/lib/stripe";
 
 function getRefundCompletedAt(status: string | null | undefined) {
   return status === "succeeded" ? new Date() : null;
@@ -20,6 +22,17 @@ function getRefundCompletedAt(status: string | null | undefined) {
 
 export async function POST(req: Request) {
   const { t } = await getT();
+
+  // Cancelling triggers real refunds; it must be tied to a verified login,
+  // not just knowledge of the order's contact email.
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: t("api.unauthorized") }, { status: 401 });
+  }
+  const accessibleEmails = (await getUserAccessibleEmails(session.userId, session.email)).map((email) =>
+    email.trim().toLowerCase()
+  );
+
   const client = await db.pool.connect();
 
   try {
@@ -28,7 +41,7 @@ export async function POST(req: Request) {
     if (!parsed.success) {
       return NextResponse.json({ error: t("api.invalidParams"), details: parsed.error.flatten() }, { status: 400 });
     }
-    const { bookingId, contactEmail, reason } = parsed.data;
+    const { bookingId, reason } = parsed.data;
 
     await client.query("BEGIN");
 
@@ -39,7 +52,7 @@ export async function POST(req: Request) {
     }
     const booking = bookings[0];
 
-    if (booking.contact_email !== contactEmail) {
+    if (!accessibleEmails.includes(String(booking.contact_email ?? "").trim().toLowerCase())) {
       await client.query("ROLLBACK");
       return NextResponse.json({ error: t("api.emailMismatch") }, { status: 403 });
     }
@@ -62,6 +75,31 @@ export async function POST(req: Request) {
     }
 
     if (!paidBooking) {
+      // Kill the open Stripe Checkout Session first so the customer cannot pay
+      // for a booking that is about to be cancelled.
+      if (booking.stripe_checkout_session_id) {
+        const expireResult = await expireCheckoutSessionSafely(booking.stripe_checkout_session_id).catch(
+          () => "not_expirable" as const
+        );
+        if (expireResult === "already_completed") {
+          // The payment raced ahead of the cancellation. Sync the payment into
+          // the DB (in case the webhook has not arrived yet), then bail out so
+          // the user retries and goes through the paid-cancellation (refund) flow.
+          await client.query("ROLLBACK");
+          try {
+            const checkoutSession = await retrieveCheckoutSession(booking.stripe_checkout_session_id);
+            await syncBookingPaymentFromCheckoutSession(checkoutSession);
+          } catch (syncError) {
+            console.error("[cancel_booking] Failed to sync completed session after expire race", {
+              bookingId,
+              sessionId: booking.stripe_checkout_session_id,
+              error: syncError,
+            });
+          }
+          return NextResponse.json({ error: t("api.cancelStateChanged") }, { status: 409 });
+        }
+      }
+
       await client.query(
         `UPDATE bookings
          SET status = 'CANCELLED',
@@ -196,7 +234,7 @@ export async function POST(req: Request) {
     if (e?.message === "STRIPE_SECRET_KEY is not configured") {
       return NextResponse.json({ error: t("api.stripeNotConfigured") }, { status: 500 });
     }
-    return NextResponse.json({ error: e?.message ?? t("api.serverError") }, { status: 500 });
+    return NextResponse.json({ error: t("api.serverError") }, { status: 500 });
   } finally {
     client.release();
   }

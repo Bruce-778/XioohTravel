@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/adminAuth";
 import { formatDateTimeJST } from "@/lib/timeFormat";
+import { getT } from "@/lib/i18n";
 
 export async function GET(req: Request) {
+  const { t } = await getT();
   const auth = await requireAdmin();
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  if (!auth.ok) return NextResponse.json({ error: t(auth.error) }, { status: auth.status });
 
   const { searchParams } = new URL(req.url);
   const dateType = searchParams.get("dateType") || "createdAt";
@@ -86,13 +88,26 @@ export async function GET(req: Request) {
     b.pricing_note || ""
   ]);
 
+  // Neutralize CSV formula injection: user-provided text starting with
+  // = + - @ would otherwise execute as a formula when opened in Excel.
+  function escapeCsvCell(cell: any) {
+    let text = String(cell ?? "");
+    if (/^[=+\-@\t\r]/.test(text)) {
+      text = `'${text}`;
+    }
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+
   const csvContent = [
     headers.join(","),
-    ...rows.map((row) => row.map((cell: any) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ...rows.map((row) => row.map(escapeCsvCell).join(","))
   ].join("\n");
 
+  // UTF-8 BOM so Excel renders Chinese characters correctly.
+  const csvWithBom = `\uFEFF${csvContent}`;
+
   // Return CSV as download
-  const response = new NextResponse(csvContent, {
+  const response = new NextResponse(csvWithBom, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="orders_${new Date().toISOString().split("T")[0]}.csv"`

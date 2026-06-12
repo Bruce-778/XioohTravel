@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/adminAuth";
 import { db } from "@/lib/db";
@@ -9,7 +10,7 @@ const NO_STORE_HEADERS = {
 };
 
 function generateId() {
-  return Math.random().toString(36).substring(2, 15);
+  return randomUUID();
 }
 
 export async function POST(req: Request) {
@@ -22,6 +23,22 @@ export async function POST(req: Request) {
     const parsed = AdminPricingImportCommitSchema.safeParse(json);
     if (!parsed.success) {
       return NextResponse.json({ error: t("api.invalidParams"), details: parsed.error.flatten() }, { status: 400 });
+    }
+
+    // Re-validate vehicle ids on the server; the commit payload comes from the
+    // browser and must not be trusted to reference real vehicle types.
+    const vehicleIds = Array.from(new Set(parsed.data.rows.map((row) => row.vehicleTypeId)));
+    const { rows: vehicleRows } = await db.query(
+      "SELECT id FROM vehicle_types WHERE id = ANY($1)",
+      [vehicleIds]
+    );
+    const knownVehicleIds = new Set(vehicleRows.map((row: any) => row.id));
+    const unknownVehicleIds = vehicleIds.filter((id) => !knownVehicleIds.has(id));
+    if (unknownVehicleIds.length > 0) {
+      return NextResponse.json(
+        { error: t("api.vehicleTypeNotFound"), details: { unknownVehicleIds } },
+        { status: 400 }
+      );
     }
 
     const client = await db.pool.connect();
@@ -94,6 +111,6 @@ export async function POST(req: Request) {
     }
   } catch (error: any) {
     console.error(error);
-    return NextResponse.json({ error: error?.message ?? t("api.serverError") }, { status: 500 });
+    return NextResponse.json({ error: t("api.serverError") }, { status: 500 });
   }
 }

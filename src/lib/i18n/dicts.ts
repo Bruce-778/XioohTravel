@@ -621,6 +621,10 @@ export const dicts: Record<Locale, Dict> = {
     "footer.rules": "服务说明",
     "footer.myOrders": "我的订单",
     "footer.faq": "常见问题",
+    "footer.privacy": "隐私政策",
+    "footer.terms": "服务条款",
+    "notFound.title": "页面不存在",
+    "notFound.desc": "您访问的页面可能已被移动或删除。",
     "footer.about": "关于我们",
     "footer.vehicleGuide": "车辆介绍",
     "footer.luggageGuide": "行李指南",
@@ -788,6 +792,10 @@ export const dicts: Record<Locale, Dict> = {
     "api.refundPaymentMissing": "无法找到该订单的 Stripe 支付记录，请联系客服处理退款。",
     "api.refundAmountInvalid": "订单退款金额异常，请联系客服处理。",
     "api.refundFeeUnavailable": "暂时无法确认 Stripe 实际手续费。为避免退款金额错误，请稍后再试或联系客服。",
+    "api.cancelStateChanged": "订单状态刚刚发生变化（付款可能已完成），请刷新页面后重试。",
+    "api.tooManyCodeAttempts": "验证码错误次数过多，已失效，请重新获取验证码。",
+    "api.tooManyRequests": "请求过于频繁，请稍后再试。",
+    "api.invalidStatusTransition": "不允许的订单状态变更",
     "dev.unlock": "输入管理员安全口令解锁后台入口（仅开发者可见）。"
   },
   en: {
@@ -1410,6 +1418,10 @@ export const dicts: Record<Locale, Dict> = {
     "footer.rules": "Service",
     "footer.myOrders": "My Orders",
     "footer.faq": "FAQ",
+    "footer.privacy": "Privacy Policy",
+    "footer.terms": "Terms of Service",
+    "notFound.title": "Page Not Found",
+    "notFound.desc": "The page you are looking for may have been moved or removed.",
     "footer.about": "About us",
     "footer.vehicleGuide": "Vehicle Guide",
     "footer.luggageGuide": "Luggage Guide",
@@ -1578,6 +1590,10 @@ export const dicts: Record<Locale, Dict> = {
     "api.refundPaymentMissing": "We could not find the Stripe payment for this booking. Please contact support for the refund.",
     "api.refundAmountInvalid": "The refund amount is invalid. Please contact support.",
     "api.refundFeeUnavailable": "Unable to confirm the actual Stripe processing fee. To avoid an incorrect refund amount, please try again later or contact support.",
+    "api.cancelStateChanged": "The order state just changed (payment may have completed). Please refresh and try again.",
+    "api.tooManyCodeAttempts": "Too many incorrect attempts. The code is now invalid; please request a new one.",
+    "api.tooManyRequests": "Too many requests. Please try again later.",
+    "api.invalidStatusTransition": "This order status change is not allowed",
     "dev.unlock": "Enter the admin security passphrase to unlock admin access (Developer only)."
   }
 };

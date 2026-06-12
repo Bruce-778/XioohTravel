@@ -75,16 +75,19 @@ export async function POST(req: Request) {
       pickupTime: created.snapshot.pickupTime,
       cancelUrl: buildCheckoutCancelUrl(req, created.bookingId, data),
       req,
+    }, {
+      idempotencyKey: `booking-checkout-${created.bookingId}`,
     });
     hasCheckoutSession = true;
 
     await attachCheckoutSessionToBooking(created.bookingId, checkoutSession);
 
-    getSession()
-      .then((session) => linkBookingEmailToUser(session?.userId, data.contactEmail))
-      .catch((error) => {
-        console.error("Failed to link booking email to user:", error);
-      });
+    try {
+      const session = await getSession();
+      await linkBookingEmailToUser(session?.userId, data.contactEmail);
+    } catch (error) {
+      console.error("Failed to link booking email to user:", error);
+    }
 
     return NextResponse.json({
       bookingId: created.bookingId,
@@ -106,6 +109,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: t("api.paymentServiceUnavailable") }, { status: 504 });
     }
     console.error(e);
-    return NextResponse.json({ error: e?.message ?? t("api.serverError") }, { status: 500 });
+    return NextResponse.json({ error: t("api.serverError") }, { status: 500 });
   }
 }

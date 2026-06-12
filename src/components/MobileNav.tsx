@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AuthLink } from "@/components/AuthLink";
+import { useSession } from "@/hooks/useSession";
 
 export function MobileNav({
   labels
@@ -11,9 +11,23 @@ export function MobileNav({
     home: string;
     orders: string;
     contact: string;
+    login: string;
+    logout: string;
   };
 }) {
   const pathname = usePathname();
+  const { user, loading } = useSession();
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch("/api/auth/logout", { method: "POST" });
+      if (res.ok) {
+        window.location.reload();
+      }
+    } catch (err) {
+      console.error("Logout failed:", err);
+    }
+  };
 
   const navItems = [
     {
@@ -45,6 +59,12 @@ export function MobileNav({
     }
   ];
 
+  const accountIcon = (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    </svg>
+  );
+
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-lg border-t border-slate-200 pb-safe">
       <div className="flex items-center justify-around h-16">
@@ -63,6 +83,28 @@ export function MobileNav({
             </AuthLink>
           );
         })}
+
+        {!loading && (
+          user ? (
+            <button
+              onClick={handleLogout}
+              className="flex flex-col items-center justify-center w-full h-full gap-1 text-slate-500 hover:text-slate-900 transition-colors"
+            >
+              {accountIcon}
+              <span className="text-[10px] font-medium uppercase tracking-wider">{labels.logout}</span>
+            </button>
+          ) : (
+            <AuthLink
+              href="/login"
+              className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-colors ${
+                pathname === "/login" ? "text-brand-600" : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              {accountIcon}
+              <span className="text-[10px] font-medium uppercase tracking-wider">{labels.login}</span>
+            </AuthLink>
+          )
+        )}
       </div>
     </div>
   );

@@ -312,7 +312,18 @@ export async function attachCheckoutSessionToBooking(bookingId: string, session:
   );
 }
 
-export async function syncBookingPaymentFromCheckoutSession(session: Stripe.Checkout.Session) {
+export type CheckoutPaymentSyncResult = {
+  bookingId: string;
+  /** Payment arrived for a booking that is already CANCELLED; the caller must refund it. */
+  cancelledButPaid: boolean;
+  /** A second, different PaymentIntent paid for an already-paid booking; the caller must refund it. */
+  duplicatePaymentIntentId: string | null;
+  amountMismatch: { expectedJpy: number; paidJpy: number } | null;
+};
+
+export async function syncBookingPaymentFromCheckoutSession(
+  session: Stripe.Checkout.Session
+): Promise<CheckoutPaymentSyncResult> {
   const bookingId = getBookingIdFromCheckoutSession(session);
   if (!bookingId) {
     throw new Error("Checkout session does not reference a booking");
@@ -320,29 +331,91 @@ export async function syncBookingPaymentFromCheckoutSession(session: Stripe.Chec
 
   const paymentStatus = session.payment_status ?? null;
   const paymentIntentId = getStripePaymentIntentId(session);
-  const paidAt = paymentStatus === "paid"
-    ? new Date((session.created ?? Math.floor(Date.now() / 1000)) * 1000)
-    : null;
+  const isPaid = paymentStatus === "paid";
 
-  await db.query(
-    `UPDATE bookings
-     SET stripe_checkout_session_id = COALESCE($2, stripe_checkout_session_id),
-         stripe_payment_intent_id = COALESCE($3, stripe_payment_intent_id),
-         stripe_payment_status = COALESCE($4, stripe_payment_status),
-         paid_at = CASE
-           WHEN $5::timestamptz IS NOT NULL THEN COALESCE(paid_at, $5)
-           ELSE paid_at
-         END,
-         status = CASE
-           WHEN $4 = 'paid' AND status = 'PENDING_PAYMENT' THEN 'PAID'
-           ELSE status
-         END,
-         updated_at = NOW()
-     WHERE id = $1`,
-    [bookingId, session.id, paymentIntentId, paymentStatus, paidAt]
-  );
+  const client = await db.pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query("SELECT * FROM bookings WHERE id = $1 FOR UPDATE", [bookingId]);
+    const booking = rows[0];
+    if (!booking) {
+      await client.query("ROLLBACK");
+      throw new Error(`Booking ${bookingId} not found for checkout session ${session.id}`);
+    }
 
-  return bookingId;
+    const existingPaymentIntentId: string | null = booking.stripe_payment_intent_id ?? null;
+    const duplicatePaymentIntentId =
+      isPaid && paymentIntentId && existingPaymentIntentId && existingPaymentIntentId !== paymentIntentId
+        ? paymentIntentId
+        : null;
+
+    let amountMismatch: CheckoutPaymentSyncResult["amountMismatch"] = null;
+    if (isPaid && session.amount_total != null) {
+      const expectedJpy = Number(booking.pricing_total_jpy);
+      if (Number.isFinite(expectedJpy) && expectedJpy !== session.amount_total) {
+        amountMismatch = { expectedJpy, paidJpy: session.amount_total };
+        console.error("[bookings] ALERT: paid amount does not match booking total", {
+          bookingId,
+          sessionId: session.id,
+          expectedJpy,
+          paidJpy: session.amount_total,
+        });
+      }
+    }
+
+    if (duplicatePaymentIntentId) {
+      // Keep the original PaymentIntent untouched so refunds always target the
+      // first charge; the duplicate charge is refunded by the caller.
+      await client.query("COMMIT");
+      console.error("[bookings] ALERT: duplicate payment detected for booking", {
+        bookingId,
+        sessionId: session.id,
+        existingPaymentIntentId,
+        duplicatePaymentIntentId,
+      });
+      return { bookingId, cancelledButPaid: false, duplicatePaymentIntentId, amountMismatch };
+    }
+
+    const paidAt = isPaid ? new Date() : null;
+
+    await client.query(
+      `UPDATE bookings
+       SET stripe_checkout_session_id = COALESCE($2, stripe_checkout_session_id),
+           stripe_payment_intent_id = COALESCE(stripe_payment_intent_id, $3),
+           stripe_payment_status = CASE
+             WHEN stripe_payment_status = 'paid' THEN 'paid'
+             ELSE COALESCE($4, stripe_payment_status)
+           END,
+           paid_at = CASE
+             WHEN $5::timestamptz IS NOT NULL THEN COALESCE(paid_at, $5)
+             ELSE paid_at
+           END,
+           status = CASE
+             WHEN $4 = 'paid' AND status = 'PENDING_PAYMENT' THEN 'PAID'
+             ELSE status
+           END,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [bookingId, session.id, paymentIntentId, paymentStatus, paidAt]
+    );
+    await client.query("COMMIT");
+
+    const cancelledButPaid = isPaid && booking.status === "CANCELLED" && !booking.stripe_refund_id;
+    if (cancelledButPaid) {
+      console.error("[bookings] ALERT: payment received for a cancelled booking", {
+        bookingId,
+        sessionId: session.id,
+        paymentIntentId,
+      });
+    }
+
+    return { bookingId, cancelledButPaid, duplicatePaymentIntentId: null, amountMismatch };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function syncBookingRefundFromStripeRefund(refund: Stripe.Refund) {
@@ -367,6 +440,17 @@ export async function syncBookingRefundFromStripeRefund(refund: Stripe.Refund) {
     `UPDATE bookings
      SET stripe_refund_id = COALESCE(stripe_refund_id, $2),
          stripe_refund_status = COALESCE($3, stripe_refund_status),
+         -- A refund initiated for this booking implies cancellation; this also
+         -- repairs the rare case where the cancel API refunded on Stripe but
+         -- failed to commit the local status update.
+         status = CASE
+           WHEN $1::text IS NOT NULL AND status IN ('PAID', 'CONFIRMED') THEN 'CANCELLED'
+           ELSE status
+         END,
+         cancelled_at = CASE
+           WHEN $1::text IS NOT NULL AND status IN ('PAID', 'CONFIRMED') THEN COALESCE(cancelled_at, NOW())
+           ELSE cancelled_at
+         END,
          refund_amount_jpy = COALESCE(refund_amount_jpy, $4),
          refund_fee_deducted_jpy = COALESCE(refund_fee_deducted_jpy, $8),
          stripe_payment_fee_jpy = CASE

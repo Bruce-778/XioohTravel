@@ -75,7 +75,7 @@ function ServiceList({
 
 export async function Footer() {
   const { t } = await getT();
-  const year = 2026;
+  const year = new Date().getFullYear();
   const contactLinks: FooterLink[] = [
     { href: WHATSAPP_URL, label: t("footer.whatsapp"), external: true },
     { href: `mailto:${SUPPORT_EMAIL}`, label: t("footer.email"), external: true },
@@ -104,10 +104,10 @@ export async function Footer() {
           <ServiceList title={t("footer.service")} items={serviceItems} />
 
           <div>
-            <div className="space-y-2 text-sm font-semibold leading-6 text-[#9b9b9b]">
-              <p>
-                © {year} <span className="text-white">{t("brand.name")}</span>
-              </p>
+            <h2 className="font-serif text-xl font-bold tracking-tight text-[#9b9b9b]">
+              {t("brand.name")}
+            </h2>
+            <div className="mt-5 space-y-3.5 text-sm font-semibold leading-6 text-[#9b9b9b]">
               <p>{t("footer.serviceArea")}</p>
               <a href={`mailto:${SUPPORT_EMAIL}`} className="block transition hover:text-white">
                 {SUPPORT_EMAIL}
@@ -121,6 +121,20 @@ export async function Footer() {
                 {SUPPORT_PHONE}
               </a>
             </div>
+          </div>
+        </div>
+
+        <div className="mt-8 flex flex-col gap-3 border-t border-white/10 pt-5 text-sm font-semibold text-[#9b9b9b] sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            © {year} <span className="text-white">{t("brand.name")}</span>
+          </p>
+          <div className="flex items-center gap-6">
+            <Link href="/privacy" className="transition hover:text-white">
+              {t("footer.privacy")}
+            </Link>
+            <Link href="/terms" className="transition hover:text-white">
+              {t("footer.terms")}
+            </Link>
           </div>
         </div>
       </div>

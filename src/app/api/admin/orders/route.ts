@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/adminAuth";
+import { getT } from "@/lib/i18n";
 
 export async function GET(req: Request) {
+  const { t } = await getT();
   const auth = await requireAdmin();
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  if (!auth.ok) return NextResponse.json({ error: t(auth.error) }, { status: auth.status });
 
   const { searchParams } = new URL(req.url);
   const dateType = searchParams.get("dateType") || "createdAt";

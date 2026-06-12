@@ -171,11 +171,26 @@ export function LocationSelector({
   const containerRef = useRef<HTMLDivElement>(null);
   const isZh = locale.startsWith("zh");
 
-  // 关闭下拉框
-  const closeDropdown = useCallback(() => {
-    setIsOpen(false);
-    setSearchQuery("");
+  const searchQueryRef = useRef("");
+
+  const updateSearchQuery = useCallback((next: string) => {
+    searchQueryRef.current = next;
+    setSearchQuery(next);
   }, []);
+
+  // 关闭下拉框。非机场模式下，如果用户输入了地址但没有点选任何建议项，
+  // 把输入的文本保留为自由地址，避免静默回退到上一次的值导致按错地址下单。
+  const closeDropdown = useCallback(
+    (options?: { commitTyped?: boolean }) => {
+      setIsOpen(false);
+      const typed = searchQueryRef.current.trim();
+      if ((options?.commitTyped ?? true) && !isAirport && typed.length >= 2 && typed !== value) {
+        onChange(typed, { value: typed, type: "google" });
+      }
+      updateSearchQuery("");
+    },
+    [isAirport, onChange, updateSearchQuery, value]
+  );
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -216,7 +231,7 @@ export function LocationSelector({
       placeId: suggestion.placeId,
       type: suggestion.type,
     });
-    closeDropdown();
+    closeDropdown({ commitTyped: false });
   };
 
   const suggestions: LocationSuggestion[] = [];
@@ -272,12 +287,12 @@ export function LocationSelector({
           title={inputDisplayValue}
           readOnly={isAirport && !isOpen} // 机场模式未打开时只读，点击触发下拉
           onChange={(e) => {
-            setSearchQuery(e.target.value);
+            updateSearchQuery(e.target.value);
             if (!isOpen) setIsOpen(true);
           }}
           onFocus={() => {
             setIsOpen(true);
-            setSearchQuery(""); // 聚焦时清空搜索，展示完整列表
+            updateSearchQuery(""); // 聚焦时清空搜索，展示完整列表
           }}
           placeholder={placeholder}
         />

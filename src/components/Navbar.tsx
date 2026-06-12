@@ -57,7 +57,7 @@ export function Navbar({
           >
             <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl sm:h-14 sm:w-14 sm:rounded-2xl">
               <Image
-                src="/brand/favicon.jpg"
+                src="/brand/favicon-192.png"
                 alt={BRAND_NAME}
                 fill
                 sizes="(min-width: 640px) 56px, 40px"
@@ -106,17 +106,15 @@ export function Navbar({
               zhLabel={labels.zh}
               enLabel={labels.en}
             />
-            <div className="hidden sm:block">
-              <CurrencySwitch
-                currency={currency}
-                label={labels.currency}
-                items={[
-                  { code: "JPY", text: labels.jpy },
-                  { code: "CNY", text: labels.cny },
-                  { code: "USD", text: labels.usd }
-                ]}
-              />
-            </div>
+            <CurrencySwitch
+              currency={currency}
+              label={labels.currency}
+              items={[
+                { code: "JPY", text: labels.jpy },
+                { code: "CNY", text: labels.cny },
+                { code: "USD", text: labels.usd }
+              ]}
+            />
 
             {!loading && (
               user ? (

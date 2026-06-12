@@ -352,6 +352,53 @@ async function sendResendEmailRequest(payload: ResendEmailPayload, idempotencyKe
   });
 }
 
+/**
+ * Plain-text operational alert sent to the merchant inbox. Used for situations
+ * that need human attention (failed refunds, duplicate payments, payments on
+ * cancelled bookings).
+ */
+export async function sendOpsAlertEmail({
+  subject,
+  lines,
+  idempotencyKey,
+}: {
+  subject: string;
+  lines: string[];
+  idempotencyKey: string;
+}) {
+  const recipients = Array.from(
+    new Set(
+      (process.env.MERCHANT_EMAILS ?? "")
+        .split(",")
+        .map((email) => normalizeEmailAddress(email))
+        .filter(Boolean)
+    )
+  );
+
+  if (recipients.length === 0) {
+    console.error("[ops_alert] MERCHANT_EMAILS not configured; alert not delivered", { subject, lines });
+    return { sent: false as const, reason: "no_recipients" as const };
+  }
+
+  const from = getBookingEmailFrom();
+  const text = lines.join("\n");
+  const html = `<div style="font-family:sans-serif;font-size:14px;line-height:1.6">${lines
+    .map((line) => `<p style="margin:0 0 8px">${escapeHtml(line)}</p>`)
+    .join("")}</div>`;
+
+  const { data, error } = await sendResendEmailRequest(
+    { from, to: recipients, subject: `[XioohTravel ALERT] ${subject}`, html, text },
+    idempotencyKey
+  );
+
+  if (error) {
+    console.error("[ops_alert] Failed to send alert email", { subject, error });
+    return { sent: false as const, reason: "send_failed" as const };
+  }
+
+  return { sent: true as const, providerId: data?.id ?? null };
+}
+
 export async function sendAuthVerificationCodeEmail({
   email,
   code,

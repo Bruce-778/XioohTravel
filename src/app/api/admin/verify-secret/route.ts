@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdminEmail, isAdminSecretConfigured, verifyAdminSecret } from "@/lib/adminConfig";
 import { getSession, isAdminVerifiedForSession, setAdminVerified } from "@/lib/auth";
 import { getT } from "@/lib/i18n";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 
 export async function GET() {
   const session = await getSession();
@@ -35,6 +36,14 @@ export async function POST(req: Request) {
 
     if (!isAdminSecretConfigured()) {
       return NextResponse.json({ error: t("api.adminTokenNotConfigured") }, { status: 500 });
+    }
+
+    const ipLimit = checkRateLimit(`verify-secret:${getClientIp(req)}`, 5, 10 * 60 * 1000);
+    if (!ipLimit.ok) {
+      return NextResponse.json(
+        { error: t("api.tooManyRequests") },
+        { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } }
+      );
     }
 
     const { secret } = await req.json();

@@ -1,8 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { getT } from "@/lib/i18n";
 import aboutUsHeroImage from "../../../Aboutus.png";
 import aboutUsStoryImage from "../../../aboutus-2.png";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: t("about.title"), description: t("about.subtitle") };
+}
 
 const HIGHLIGHT_ITEMS = [
   {

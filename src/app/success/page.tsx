@@ -19,20 +19,24 @@ export default async function SuccessPage({
   const { t } = await getT();
   const locale = await getLocale();
   const sessionId = typeof sp.session_id === "string" ? sp.session_id : null;
-  let bookingId = typeof sp.bookingId === "string" ? sp.bookingId : null;
+  // Only accept the unguessable Stripe checkout session id; a raw bookingId
+  // would let anyone view order details (PII) just by knowing the order number.
+  let bookingId: string | null = null;
 
   if (sessionId) {
     try {
       const checkoutSession = await retrieveCheckoutSession(sessionId);
-      bookingId = getBookingIdFromCheckoutSession(checkoutSession) ?? bookingId;
+      bookingId = getBookingIdFromCheckoutSession(checkoutSession);
       if (checkoutSession.payment_status === "paid") {
-        const syncedBookingId = await syncBookingPaymentFromCheckoutSession(checkoutSession);
-        await sendPaymentConfirmationEmailIfNeeded(syncedBookingId).catch((error) => {
-          console.error("[success] Failed to send payment confirmation email", {
-            bookingId: syncedBookingId,
-            error,
+        const syncResult = await syncBookingPaymentFromCheckoutSession(checkoutSession);
+        if (!syncResult.cancelledButPaid && !syncResult.duplicatePaymentIntentId) {
+          await sendPaymentConfirmationEmailIfNeeded(syncResult.bookingId).catch((error) => {
+            console.error("[success] Failed to send payment confirmation email", {
+              bookingId: syncResult.bookingId,
+              error,
+            });
           });
-        });
+        }
       }
     } catch (error) {
       console.error(error);
@@ -79,7 +83,7 @@ export default async function SuccessPage({
     [VEHICLE_NAMES.BUS]: "bus",
   };
   const displayStatus = t(`status.${booking.status}`);
-  const ordersHref = `/orders?email=${encodeURIComponent(booking.contact_email)}`;
+  const ordersHref = "/orders";
   const vehicleTranslationKey = booking.vehicle_name ? vehicleKeyMap[booking.vehicle_name] : null;
   const displayVehicle = vehicleTranslationKey
     ? t(`vehicle.${vehicleTranslationKey}`)

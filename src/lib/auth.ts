@@ -2,9 +2,19 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { isAdminEmail } from "@/lib/adminConfig";
 
-const secret = new TextEncoder().encode(
-  process.env.JWT_SECRET || "default_secret_key_change_me"
-);
+let cachedSecret: Uint8Array | null = null;
+
+function getJwtSecret(): Uint8Array {
+  if (cachedSecret) return cachedSecret;
+  const value = process.env.JWT_SECRET;
+  if (!value || value.length < 32) {
+    throw new Error(
+      "JWT_SECRET environment variable must be set to a random string of at least 32 characters"
+    );
+  }
+  cachedSecret = new TextEncoder().encode(value);
+  return cachedSecret;
+}
 const ADMIN_VERIFICATION_COOKIE = "admin_verified";
 const ADMIN_VERIFICATION_EXPIRES_IN_SECONDS = 12 * 60 * 60;
 
@@ -25,12 +35,12 @@ export async function encrypt(payload: AuthPayload) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("30d")
-    .sign(secret);
+    .sign(getJwtSecret());
 }
 
 export async function decrypt(input: string): Promise<AuthPayload | null> {
   try {
-    const { payload } = await jwtVerify(input, secret, {
+    const { payload } = await jwtVerify(input, getJwtSecret(), {
       algorithms: ["HS256"],
     });
     return payload as AuthPayload;
@@ -79,7 +89,7 @@ export async function isAdminVerifiedForSession(session: AuthPayload | null) {
   if (!token) return false;
 
   try {
-    const { payload } = await jwtVerify(token, secret, {
+    const { payload } = await jwtVerify(token, getJwtSecret(), {
       algorithms: ["HS256"],
     });
     const verifiedPayload = payload as AdminVerificationPayload;
@@ -104,7 +114,7 @@ export async function setAdminVerified(session: AuthPayload) {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${ADMIN_VERIFICATION_EXPIRES_IN_SECONDS}s`)
-    .sign(secret);
+    .sign(getJwtSecret());
 
   cookieStore.set(ADMIN_VERIFICATION_COOKIE, token, {
     httpOnly: true, 

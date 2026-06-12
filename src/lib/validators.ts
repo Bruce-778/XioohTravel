@@ -120,19 +120,20 @@ export const CreateBookingSchema = CreateBookingBaseSchema
   .transform(normalizeChildrenAndLuggage);
 
 export const RetryPaymentSchema = z.object({
-  bookingId: z.string().min(5),
-  contactEmail: z.string().email().optional()
+  bookingId: z.string().min(5)
 });
 
 export const CancelBookingSchema = z.object({
   bookingId: z.string().min(5),
-  contactEmail: z.string().email(),
+  // Ownership is now verified via the login session; the email field is kept
+  // optional for backward compatibility with older clients.
+  contactEmail: z.string().email().optional(),
   reason: z.string().min(2).max(200)
 });
 
 export const RefundPreviewSchema = z.object({
   bookingId: z.string().min(5),
-  contactEmail: z.string().email()
+  contactEmail: z.string().email().optional()
 });
 
 export const AdminUpdateBookingSchema = z.object({

@@ -151,7 +151,8 @@ export default async function CheckoutPage({
   const urgent = isUrgent ? rule.urgentFeeJpy : 0;
   const defaultPickupLocation = getDisplayLocation(q.fromArea, addressParams.fromAddress, locale);
   const defaultDropoffLocation = getDisplayLocation(q.toArea, addressParams.toAddress, locale);
-  const displayVehicle = t(`vehicle.${vehicleKeyMap[vehicle.name] || vehicle.name}`);
+  const vehicleTranslationKey = vehicleKeyMap[vehicle.name];
+  const displayVehicle = vehicleTranslationKey ? t(`vehicle.${vehicleTranslationKey}`) : vehicle.name;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-10">

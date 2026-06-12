@@ -1,6 +1,12 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import { getT } from "@/lib/i18n";
 import type { LuggageKind } from "@/components/LuggageCapacityDisplay";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: t("luggageGuide.title"), description: t("luggageGuide.subtitle") };
+}
 
 type LuggageGuideItem = {
   kind: LuggageKind;

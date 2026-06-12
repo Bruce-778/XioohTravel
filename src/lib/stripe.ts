@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { HttpsProxyAgent } from "https-proxy-agent";
+import { formatJstDateTimeLocalValue } from "@/lib/timeFormat";
 
 let stripeClient: Stripe | null = null;
 
@@ -296,8 +297,12 @@ function buildStripePaymentFeeBreakdown(
   };
 }
 
+function formatPickupTimeJstLabel(pickupTime: Date) {
+  return formatJstDateTimeLocalValue(pickupTime).replace("T", " ");
+}
+
 function buildCheckoutPricingComponents(input: CreateCheckoutSessionInput) {
-  const pickupDate = input.pickupTime.toISOString().slice(0, 16).replace("T", " ");
+  const pickupDate = formatPickupTimeJstLabel(input.pickupTime);
   const routeLabel = `${input.pickupLocation} -> ${input.dropoffLocation}`;
   const fareJpy =
     Number(input.baseJpy ?? 0) +
@@ -364,7 +369,10 @@ function buildCheckoutLineItems(input: CreateCheckoutSessionInput): CheckoutLine
   }));
 }
 
-export async function createBookingCheckoutSession(input: CreateCheckoutSessionInput) {
+export async function createBookingCheckoutSession(
+  input: CreateCheckoutSessionInput,
+  options?: { idempotencyKey?: string }
+) {
   const lineItems = buildCheckoutLineItems(input);
   const computedTotal = lineItems.reduce((sum, item) => {
     const unitAmount = item.price_data?.unit_amount ?? 0;
@@ -381,36 +389,84 @@ export async function createBookingCheckoutSession(input: CreateCheckoutSessionI
 
   const stripe = getStripe();
   const baseUrl = getAppBaseUrl(input.req);
-  const pickupDate = input.pickupTime.toISOString().slice(0, 16).replace("T", " ");
+  const pickupDate = formatPickupTimeJstLabel(input.pickupTime);
   const routeLabel = `${input.pickupLocation} -> ${input.dropoffLocation}`;
 
   return withTimeout(
-    stripe.checkout.sessions.create({
-      mode: "payment",
-      client_reference_id: input.bookingId,
-      customer_email: input.contactEmail,
-      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:
-        input.cancelUrl ??
-        `${baseUrl}/orders?email=${encodeURIComponent(input.contactEmail)}&bookingId=${encodeURIComponent(input.bookingId)}&payment=cancelled`,
-      expires_at: Math.floor(Date.now() / 1000) + STRIPE_CHECKOUT_SESSION_EXPIRES_IN_SECONDS,
-      line_items: lineItems,
-      metadata: {
-        bookingId: input.bookingId,
-        contactEmail: input.contactEmail,
-      },
-      payment_intent_data: {
-        description: `XioohTravel booking ${input.bookingId} | ${routeLabel} | ${pickupDate} JST`,
+    stripe.checkout.sessions.create(
+      {
+        mode: "payment",
+        client_reference_id: input.bookingId,
+        customer_email: input.contactEmail,
+        success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url:
+          input.cancelUrl ??
+          `${baseUrl}/orders?bookingId=${encodeURIComponent(input.bookingId)}&payment=cancelled`,
+        expires_at: Math.floor(Date.now() / 1000) + STRIPE_CHECKOUT_SESSION_EXPIRES_IN_SECONDS,
+        line_items: lineItems,
         metadata: {
           bookingId: input.bookingId,
           contactEmail: input.contactEmail,
-          pickupLocation: input.pickupLocation,
-          dropoffLocation: input.dropoffLocation,
+        },
+        payment_intent_data: {
+          description: `XioohTravel booking ${input.bookingId} | ${routeLabel} | ${pickupDate} JST`,
+          metadata: {
+            bookingId: input.bookingId,
+            contactEmail: input.contactEmail,
+            pickupLocation: input.pickupLocation,
+            dropoffLocation: input.dropoffLocation,
+          },
         },
       },
-    }),
+      options?.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined
+    ),
     STRIPE_CHECKOUT_CREATE_TIMEOUT_MS,
     new StripeCheckoutTimeoutError()
+  );
+}
+
+export type ExpireCheckoutSessionResult = "expired" | "already_completed" | "not_expirable";
+
+/**
+ * Expires an open Checkout Session so it can no longer be paid (e.g. after the
+ * booking is cancelled or before issuing a fresh payment link). Returns
+ * "already_completed" when the customer managed to pay before we expired it,
+ * so callers can handle the payment race instead of silently ignoring it.
+ */
+export async function expireCheckoutSessionSafely(sessionId: string): Promise<ExpireCheckoutSessionResult> {
+  const stripe = getStripe();
+  try {
+    await stripe.checkout.sessions.expire(sessionId);
+    return "expired";
+  } catch {
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      return session.status === "complete" ? "already_completed" : "not_expirable";
+    } catch {
+      return "not_expirable";
+    }
+  }
+}
+
+/**
+ * Full refund used as an automatic safety net (duplicate payment, or payment
+ * that landed on an already-cancelled booking).
+ */
+export async function createSafetyRefund({
+  paymentIntentId,
+  idempotencyKey,
+  metadata,
+}: {
+  paymentIntentId: string;
+  idempotencyKey: string;
+  metadata?: Record<string, string>;
+}) {
+  return getStripe().refunds.create(
+    {
+      payment_intent: paymentIntentId,
+      ...(metadata ? { metadata } : {}),
+    },
+    { idempotencyKey }
   );
 }
 
