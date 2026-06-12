@@ -6,16 +6,22 @@ import aboutUsStoryImage from "../../../aboutus-2.png";
 
 const HIGHLIGHT_ITEMS = [
   {
-    key: "airport",
-    imageSrc: "/home-services/serve-2.png",
+    key: "flight",
   },
   {
     key: "price",
-    imageSrc: "/vehicles/Alphard_vehicle.png",
+  },
+  {
+    key: "vehicle",
+  },
+  {
+    key: "meeting",
+  },
+  {
+    key: "sign",
   },
   {
     key: "support",
-    imageSrc: "/home-services/serve-3.png",
   },
 ] as const;
 
@@ -160,7 +166,7 @@ export default async function AboutPage() {
 
       <section className="bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div>
+          <div className="max-w-4xl">
             <div className="text-sm font-black uppercase text-amber-700">
               {t("about.serviceEyebrow")}
             </div>
@@ -172,28 +178,26 @@ export default async function AboutPage() {
             </p>
           </div>
 
-          <div className="mt-9 grid gap-5 lg:grid-cols-3">
-            {HIGHLIGHT_ITEMS.map((item) => (
+          <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {HIGHLIGHT_ITEMS.map((item, index) => (
               <article
                 key={item.key}
-                className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-lg"
+                className="flex min-h-[176px] flex-col rounded-lg border border-slate-200 bg-slate-50 p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-sky-200 hover:bg-white hover:shadow-md"
               >
-                <div className="relative aspect-[16/11] bg-slate-100">
-                  <Image
-                    src={item.imageSrc}
-                    alt={t(`about.highlight.${item.key}.imageAlt`)}
-                    fill
-                    sizes="(min-width: 1024px) 390px, calc(100vw - 32px)"
-                    className={item.key === "price" ? "object-contain p-6" : "object-cover"}
-                  />
-                </div>
-                <div className="p-6">
-                  <h3 className="text-lg font-black text-slate-950">
+                <div className="flex items-start justify-between gap-4">
+                  <h3 className="text-lg font-black leading-7 text-slate-950">
                     {t(`about.highlight.${item.key}.title`)}
                   </h3>
-                  <p className="mt-3 text-sm leading-7 text-slate-600">
-                    {t(`about.highlight.${item.key}.body`)}
-                  </p>
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-xs font-black text-amber-700 ring-1 ring-amber-200">
+                    {String(index + 1).padStart(2, "0")}
+                  </div>
+                </div>
+                <p className="mt-3 flex-1 text-sm leading-7 text-slate-600">
+                  {t(`about.highlight.${item.key}.body`)}
+                </p>
+                <div className="mt-5 flex items-center gap-2 text-xs font-black uppercase tracking-[0.08em] text-slate-400">
+                  <span className="h-px flex-1 bg-slate-200" />
+                  {t("about.highlight.ready")}
                 </div>
               </article>
             ))}
