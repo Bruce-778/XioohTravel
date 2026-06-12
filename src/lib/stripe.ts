@@ -1,8 +1,44 @@
 import Stripe from "stripe";
+import { HttpsProxyAgent } from "https-proxy-agent";
 
 let stripeClient: Stripe | null = null;
 
-export const STRIPE_CHECKOUT_SESSION_EXPIRES_IN_SECONDS = 30 * 60;
+// Stripe requires at least 30 minutes; keep a buffer for clock skew and network latency.
+export const STRIPE_CHECKOUT_SESSION_EXPIRES_IN_SECONDS = 35 * 60;
+const STRIPE_API_TIMEOUT_MS = 10_000;
+const STRIPE_API_MAX_NETWORK_RETRIES = 1;
+const STRIPE_CHECKOUT_CREATE_TIMEOUT_MS = 20_000;
+
+export class StripeCheckoutTimeoutError extends Error {
+  constructor() {
+    super("STRIPE_CHECKOUT_TIMEOUT");
+    this.name = "StripeCheckoutTimeoutError";
+  }
+}
+
+export function isStripeCheckoutUnavailableError(error: unknown) {
+  if (error instanceof StripeCheckoutTimeoutError) return true;
+  if (!error || typeof error !== "object") return false;
+
+  const stripeError = error as { type?: string; code?: string; message?: string };
+  return (
+    stripeError.type === "StripeConnectionError" ||
+    stripeError.code === "ETIMEDOUT" ||
+    stripeError.code === "ECONNRESET" ||
+    stripeError.message === "STRIPE_CHECKOUT_TIMEOUT"
+  );
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutError: Error) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(timeoutError), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+}
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
@@ -13,13 +49,27 @@ function getRequestOrigin(req?: Request) {
   return trimTrailingSlash(new URL(req.url).origin);
 }
 
+function getStripeProxyUrl() {
+  return process.env.HTTPS_PROXY ?? process.env.https_proxy ?? process.env.HTTP_PROXY ?? process.env.http_proxy ?? null;
+}
+
 export function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) {
     throw new Error("STRIPE_SECRET_KEY is not configured");
   }
 
   if (!stripeClient) {
-    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripeConfig: ConstructorParameters<typeof Stripe>[1] = {
+      maxNetworkRetries: STRIPE_API_MAX_NETWORK_RETRIES,
+      timeout: STRIPE_API_TIMEOUT_MS,
+    };
+    const proxyUrl = getStripeProxyUrl();
+
+    if (proxyUrl) {
+      stripeConfig.httpAgent = new HttpsProxyAgent(proxyUrl);
+    }
+
+    stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY, stripeConfig);
   }
 
   return stripeClient;
@@ -334,30 +384,34 @@ export async function createBookingCheckoutSession(input: CreateCheckoutSessionI
   const pickupDate = input.pickupTime.toISOString().slice(0, 16).replace("T", " ");
   const routeLabel = `${input.pickupLocation} -> ${input.dropoffLocation}`;
 
-  return stripe.checkout.sessions.create({
-    mode: "payment",
-    client_reference_id: input.bookingId,
-    customer_email: input.contactEmail,
-    success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url:
-      input.cancelUrl ??
-      `${baseUrl}/orders?email=${encodeURIComponent(input.contactEmail)}&bookingId=${encodeURIComponent(input.bookingId)}&payment=cancelled`,
-    expires_at: Math.floor(Date.now() / 1000) + STRIPE_CHECKOUT_SESSION_EXPIRES_IN_SECONDS,
-    line_items: lineItems,
-    metadata: {
-      bookingId: input.bookingId,
-      contactEmail: input.contactEmail,
-    },
-    payment_intent_data: {
-      description: `XioohTravel booking ${input.bookingId} | ${routeLabel} | ${pickupDate} JST`,
+  return withTimeout(
+    stripe.checkout.sessions.create({
+      mode: "payment",
+      client_reference_id: input.bookingId,
+      customer_email: input.contactEmail,
+      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:
+        input.cancelUrl ??
+        `${baseUrl}/orders?email=${encodeURIComponent(input.contactEmail)}&bookingId=${encodeURIComponent(input.bookingId)}&payment=cancelled`,
+      expires_at: Math.floor(Date.now() / 1000) + STRIPE_CHECKOUT_SESSION_EXPIRES_IN_SECONDS,
+      line_items: lineItems,
       metadata: {
         bookingId: input.bookingId,
         contactEmail: input.contactEmail,
-        pickupLocation: input.pickupLocation,
-        dropoffLocation: input.dropoffLocation,
       },
-    },
-  });
+      payment_intent_data: {
+        description: `XioohTravel booking ${input.bookingId} | ${routeLabel} | ${pickupDate} JST`,
+        metadata: {
+          bookingId: input.bookingId,
+          contactEmail: input.contactEmail,
+          pickupLocation: input.pickupLocation,
+          dropoffLocation: input.dropoffLocation,
+        },
+      },
+    }),
+    STRIPE_CHECKOUT_CREATE_TIMEOUT_MS,
+    new StripeCheckoutTimeoutError()
+  );
 }
 
 export async function retrieveCheckoutSession(sessionId: string) {

@@ -9,7 +9,7 @@ import {
   deleteBookingIfPending,
   linkBookingEmailToUser,
 } from "@/lib/bookings";
-import { createBookingCheckoutSession, getAppBaseUrl } from "@/lib/stripe";
+import { createBookingCheckoutSession, getAppBaseUrl, isStripeCheckoutUnavailableError } from "@/lib/stripe";
 
 type CheckoutCancelData = {
   tripType: "PICKUP" | "DROPOFF" | "POINT_TO_POINT";
@@ -80,10 +80,11 @@ export async function POST(req: Request) {
 
     await attachCheckoutSessionToBooking(created.bookingId, checkoutSession);
 
-    const session = await getSession();
-    await linkBookingEmailToUser(session?.userId, data.contactEmail).catch((error) => {
-      console.error("Failed to link booking email to user:", error);
-    });
+    getSession()
+      .then((session) => linkBookingEmailToUser(session?.userId, data.contactEmail))
+      .catch((error) => {
+        console.error("Failed to link booking email to user:", error);
+      });
 
     return NextResponse.json({
       bookingId: created.bookingId,
@@ -99,6 +100,10 @@ export async function POST(req: Request) {
     }
     if (e?.message === "STRIPE_SECRET_KEY is not configured") {
       return NextResponse.json({ error: t("api.stripeNotConfigured") }, { status: 500 });
+    }
+    if (isStripeCheckoutUnavailableError(e)) {
+      console.error("Stripe checkout unavailable:", e);
+      return NextResponse.json({ error: t("api.paymentServiceUnavailable") }, { status: 504 });
     }
     console.error(e);
     return NextResponse.json({ error: e?.message ?? t("api.serverError") }, { status: 500 });

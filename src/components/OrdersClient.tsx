@@ -379,22 +379,28 @@ export function OrdersClient({
   async function retryPayment(row: BookingRow) {
     setActionLoadingId(row.id);
     setError(null);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 30_000);
+
     try {
       const res = await fetch("/api/bookings/retry-payment", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           bookingId: row.id,
           contactEmail: user ? undefined : row.contactEmail,
         }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error ?? labels.queryFailed);
       if (!data?.checkoutUrl) throw new Error(labels.queryFailed);
       window.location.assign(data.checkoutUrl);
     } catch (e: any) {
-      setError(e?.message ?? labels.queryFailed);
+      setError(e?.name === "AbortError" ? labels.queryFailed : e?.message ?? labels.queryFailed);
       setActionLoadingId(null);
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }
 

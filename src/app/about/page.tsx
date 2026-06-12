@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getT } from "@/lib/i18n";
 import aboutUsHeroImage from "../../../Aboutus.png";
+import aboutUsStoryImage from "../../../aboutus-2.png";
 
 const HIGHLIGHT_ITEMS = [
   {
@@ -59,12 +60,7 @@ export default async function AboutPage() {
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[0.98fr_1.02fr] lg:items-center lg:px-8">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-bold text-sky-800">
-              <span className="h-2 w-2 rounded-full bg-sky-500" />
-              {t("about.eyebrow")}
-            </div>
-
-            <h1 className="mt-5 max-w-2xl text-4xl font-black leading-[1.08] text-slate-950 sm:text-5xl">
+            <h1 className="max-w-2xl text-4xl font-black leading-[1.08] text-slate-950 sm:text-5xl">
               {t("about.title")}
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-8 text-slate-600 sm:text-lg">
@@ -93,7 +89,7 @@ export default async function AboutPage() {
             <div className="mt-9 grid max-w-2xl gap-3 sm:grid-cols-3">
               {["airports", "vehicles", "support"].map((key) => (
                 <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-2xl font-black text-slate-950">
+                  <div className="whitespace-nowrap text-xl font-black text-slate-950 xl:text-2xl">
                     {t(`about.stat.${key}.value`)}
                   </div>
                   <div className="mt-1 text-xs font-semibold leading-5 text-slate-500">
@@ -120,18 +116,17 @@ export default async function AboutPage() {
       </section>
 
       <section className="bg-[#f8fafc] py-16 sm:py-20">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.88fr_1.12fr] lg:items-center lg:px-8">
-          <div className="relative aspect-[4/3] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.78fr_1.22fr] lg:items-stretch lg:px-8">
+          <div className="flex justify-center lg:justify-start lg:self-stretch">
             <Image
-              src="/home-services/serve-2.png"
+              src={aboutUsStoryImage}
               alt={t("about.storyImageAlt")}
-              fill
-              sizes="(min-width: 1024px) 500px, calc(100vw - 32px)"
-              className="object-cover"
+              sizes="(min-width: 1024px) 480px, calc(100vw - 32px)"
+              className="block h-auto w-full max-w-[520px] rounded-lg lg:h-full lg:w-auto lg:max-w-full"
             />
           </div>
 
-          <div>
+          <div className="flex h-full flex-col">
             <div className="text-sm font-black uppercase text-emerald-700">
               {t("about.whatWeDoTitle")}
             </div>
@@ -142,9 +137,9 @@ export default async function AboutPage() {
               {t("about.whatWeDoBody")}
             </p>
 
-            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:flex-1 lg:auto-rows-fr">
               {PROCESS_KEYS.map((key, index) => (
-                <article key={key} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                <article key={key} className="flex h-full flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                   <div className="flex items-center gap-3">
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-950 text-sm font-black text-white">
                       {index + 1}
@@ -165,11 +160,11 @@ export default async function AboutPage() {
 
       <section className="bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
+          <div>
             <div className="text-sm font-black uppercase text-amber-700">
               {t("about.serviceEyebrow")}
             </div>
-            <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950 sm:text-4xl">
+            <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950 sm:text-4xl lg:whitespace-nowrap">
               {t("about.serviceTitle")}
             </h2>
             <p className="mt-4 text-base leading-8 text-slate-600">
@@ -208,18 +203,15 @@ export default async function AboutPage() {
 
       <section className="bg-[#f1f5f9] py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="grid gap-8 lg:grid-cols-[0.86fr_1.14fr] lg:items-end">
+          <div>
             <div>
               <div className="text-sm font-black uppercase text-sky-800">
                 {t("about.coverageEyebrow")}
               </div>
-              <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950 sm:text-4xl">
+              <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950 sm:text-4xl lg:whitespace-nowrap">
                 {t("about.coverageTitle")}
               </h2>
             </div>
-            <p className="text-base leading-8 text-slate-600">
-              {t("about.coverageBody")}
-            </p>
           </div>
 
           <div className="mt-9 grid gap-5 md:grid-cols-3">
@@ -249,12 +241,12 @@ export default async function AboutPage() {
       </section>
 
       <section className="bg-white py-16 text-slate-950 sm:py-20">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:px-8">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[1.5fr_0.7fr] lg:items-center lg:gap-8 lg:px-8 xl:grid-cols-[1.32fr_0.68fr]">
           <div>
             <div className="text-sm font-black uppercase text-sky-700">
               {t("about.promiseEyebrow")}
             </div>
-            <h2 className="mt-3 text-3xl font-black leading-tight sm:text-4xl">
+            <h2 className="mt-3 text-3xl font-black leading-tight sm:text-4xl lg:whitespace-nowrap lg:text-[1.875rem] xl:text-[2rem] 2xl:text-4xl">
               {t("about.promiseTitle")}
             </h2>
             <p className="mt-5 max-w-3xl text-base leading-8 text-slate-600">

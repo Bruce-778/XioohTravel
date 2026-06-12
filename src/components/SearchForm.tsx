@@ -648,7 +648,7 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
           </div>
         ) : null}
         {pickupTime ? (
-          <div className="mt-1.5 text-xs text-slate-500">
+          <div className={cn("mt-1.5 text-xs text-slate-500", labels?.timezoneHint && "pl-[1.125rem]")}>
             {(labels?.selectedTime ?? "Selected time")}: {formatDateTimePreview(pickupTime, locale)}
           </div>
         ) : null}

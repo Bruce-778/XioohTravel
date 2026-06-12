@@ -7,7 +7,7 @@ import {
   getBookingById,
   getUserAccessibleEmails,
 } from "@/lib/bookings";
-import { createBookingCheckoutSession } from "@/lib/stripe";
+import { createBookingCheckoutSession, isStripeCheckoutUnavailableError } from "@/lib/stripe";
 
 export async function POST(req: Request) {
   const { t } = await getT();
@@ -62,6 +62,10 @@ export async function POST(req: Request) {
   } catch (e: any) {
     if (e?.message === "STRIPE_SECRET_KEY is not configured") {
       return NextResponse.json({ error: t("api.stripeNotConfigured") }, { status: 500 });
+    }
+    if (isStripeCheckoutUnavailableError(e)) {
+      console.error("Stripe checkout unavailable:", e);
+      return NextResponse.json({ error: t("api.paymentServiceUnavailable") }, { status: 504 });
     }
     console.error(e);
     return NextResponse.json({ error: e?.message ?? t("api.serverError") }, { status: 500 });

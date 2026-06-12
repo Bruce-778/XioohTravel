@@ -184,7 +184,7 @@ function AddOnQuantityCard({
             onChange(Math.min(max, Math.max(0, Math.trunc(next))));
           }}
           aria-label={label}
-          className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 bg-white px-1 text-center text-sm font-bold text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+          className="addon-quantity-input h-10 w-10 shrink-0 rounded-lg border border-slate-200 bg-white px-1 text-center text-sm font-bold text-slate-900 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
         />
       </label>
       {value >= max ? (
@@ -197,9 +197,10 @@ function AddOnQuantityCard({
 function ChildSeatIcon() {
   return (
     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7.5a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M6.5 20v-4.5a4 4 0 0 1 4-4h0a4 4 0 0 1 4 4V20" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M5 20h10.5a2.5 2.5 0 0 0 2.5-2.5V5" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M8.7 5.8a2.15 2.15 0 1 1 4.3 0 2.15 2.15 0 0 1-4.3 0Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M7.3 12.4c.7-1.7 2-2.7 3.7-2.7 1.8 0 3.1 1 3.8 2.7" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M6.2 8.4 4.6 18.1c-.2 1 .6 1.9 1.6 1.9h8.7c1.2 0 2.2-.8 2.5-2l2.1-9.6" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M7 15.1h8.2M11.2 12.2 9.8 20M14.5 12.3l.8 5.2" />
     </svg>
   );
 }
@@ -207,9 +208,11 @@ function ChildSeatIcon() {
 function MeetAndGreetIcon() {
   return (
     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 4.5h10A2.5 2.5 0 0 1 19.5 7v10a2.5 2.5 0 0 1-2.5 2.5H7A2.5 2.5 0 0 1 4.5 17V7A2.5 2.5 0 0 1 7 4.5z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 9h8M8 13h5" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10 4.5V3m4 1.5V3" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M4.5 6.5h15v8.2h-15z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M12 14.7V21" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M9 21h6" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M7.2 10.6h9.6" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M7.2 3.5v3M16.8 3.5v3" />
     </svg>
   );
 }
@@ -789,13 +792,16 @@ export function CheckoutForm({
           }
 
           setLoading(true);
+          const controller = new AbortController();
+          const timeoutId = window.setTimeout(() => controller.abort(), 30_000);
           try {
             const res = await fetch("/api/bookings", {
               method: "POST",
               headers: { "content-type": "application/json" },
+              signal: controller.signal,
               body: JSON.stringify(payload),
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => null);
             if (!res.ok) throw new Error(data?.error ?? labels.orderFailed);
             if (!data?.checkoutUrl) {
               throw new Error(labels.orderFailed);
@@ -805,8 +811,9 @@ export function CheckoutForm({
             }
             window.location.assign(data.checkoutUrl);
           } catch (err: any) {
-            setError(err?.message ?? labels.orderFailed);
+            setError(err?.name === "AbortError" ? labels.orderFailed : err?.message ?? labels.orderFailed);
           } finally {
+            window.clearTimeout(timeoutId);
             setLoading(false);
           }
         }}
