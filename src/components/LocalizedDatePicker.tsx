@@ -156,7 +156,8 @@ export function LocalizedDatePicker({
   }, []);
 
   function updateDate(nextDatePart: string) {
-    onChange(nextDatePart);
+    // Clicking the already-selected date deselects it (clears the field).
+    onChange(nextDatePart === value ? "" : nextDatePart);
     setIsOpen(false);
   }
 

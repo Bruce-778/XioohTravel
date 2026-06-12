@@ -991,12 +991,14 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
   }, []);
 
   function getFilterDates() {
-    if (startDate && endDate) {
-      const start = new Date(`${startDate}T${startTime}`);
-      const end = new Date(`${endDate}T${endTime}`);
-      return { startDate: start.toISOString(), endDate: end.toISOString() };
-    }
-    return { startDate: null, endDate: null };
+    // Start and end work independently: start-only means "from this date
+    // onwards", end-only means "everything up to this date".
+    const start = startDate ? new Date(`${startDate}T${startTime || "00:00"}`) : null;
+    const end = endDate ? new Date(`${endDate}T${endTime || "23:59"}`) : null;
+    return {
+      startDate: start ? start.toISOString() : null,
+      endDate: end ? end.toISOString() : null,
+    };
   }
 
   async function load() {
@@ -1711,7 +1713,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
               />
               <input
                 type="time"
-                className="flex-1 min-w-[100px] appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                className="w-[120px] flex-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
                 lang={dateTimeLocale}
@@ -1734,7 +1736,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
               />
               <input
                 type="time"
-                className="flex-1 min-w-[100px] appearance-none rounded-lg border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                className="w-[120px] flex-none rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 lang={dateTimeLocale}
@@ -2457,16 +2459,16 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
 
               <div className="border-t border-slate-200">
                 <div className="overflow-x-auto">
-                  <table className="min-w-[1180px] w-full text-sm">
+                  <table className="min-w-[1020px] w-full text-sm">
                     <thead className="bg-slate-50/90 text-left text-slate-500">
                       <tr className="border-b border-slate-200">
-                        <th className="w-[38%] min-w-[320px] px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.route}</th>
-                        <th className="w-[130px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.tripType}</th>
-                        <th className="w-[180px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.vehicleType}</th>
-                        <th className="w-[130px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.basePrice}</th>
-                        <th className="w-[130px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.nightFee}</th>
-                        <th className="w-[130px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.urgentFee}</th>
-                        <th className="w-[260px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.action}</th>
+                        <th className="w-[30%] min-w-[230px] px-4 py-4 text-left text-xs font-semibold tracking-[0.06em]">{labels.route}</th>
+                        <th className="w-[110px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.tripType}</th>
+                        <th className="w-[150px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.vehicleType}</th>
+                        <th className="w-[110px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.basePrice}</th>
+                        <th className="w-[110px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.nightFee}</th>
+                        <th className="w-[110px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.urgentFee}</th>
+                        <th className="sticky right-0 z-10 w-[230px] whitespace-nowrap bg-slate-50 px-4 py-4 text-center text-xs font-semibold tracking-[0.06em] shadow-[-10px_0_10px_-10px_rgba(15,23,42,0.18)]">{labels.action}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -2483,7 +2485,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                       ) : (
                         paginatedRules.map((rule) => (
                           <tr key={rule.id} className="align-middle transition hover:bg-brand-50/30">
-                            <td className="px-5 py-5">
+                            <td className="px-4 py-5">
                               <div className="font-semibold leading-6 text-slate-900">
                                 {getPricingDisplayValue(rule.fromArea)} {"->"} {getPricingDisplayValue(rule.toArea)}
                               </div>
@@ -2491,43 +2493,43 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                                 {rule.fromArea} {"->"} {rule.toArea}
                               </div>
                             </td>
-                            <td className="px-5 py-5 align-top">
+                            <td className="px-3 py-5 text-center align-middle">
                               <span className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
                                 {getTripTypeLabel(rule.tripType)}
                               </span>
                             </td>
-                            <td className="px-5 py-5 align-top">
+                            <td className="px-3 py-5 text-center align-middle">
                               <span className="inline-flex whitespace-nowrap rounded-full border border-brand-100 bg-brand-50/80 px-2.5 py-1 text-xs font-medium text-brand-700">
                                 {labels.vehicles[rule.vehicleType.name] || rule.vehicleType.name}
                               </span>
                             </td>
-                            <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                            <td className="whitespace-nowrap px-3 py-5 text-center align-middle font-semibold tabular-nums text-slate-900">
                               {formatMoneyFromJpy(rule.basePriceJpy, currency, locale)}
                             </td>
-                            <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                            <td className="whitespace-nowrap px-3 py-5 text-center align-middle font-semibold tabular-nums text-slate-900">
                               {formatMoneyFromJpy(rule.nightFeeJpy, currency, locale)}
                             </td>
-                            <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                            <td className="whitespace-nowrap px-3 py-5 text-center align-middle font-semibold tabular-nums text-slate-900">
                               {formatMoneyFromJpy(rule.urgentFeeJpy, currency, locale)}
                             </td>
-                            <td className="px-5 py-5 align-top">
-                              <div className="flex flex-nowrap justify-end gap-2.5 whitespace-nowrap">
+                            <td className="sticky right-0 z-10 bg-white px-4 py-5 align-middle shadow-[-10px_0_10px_-10px_rgba(15,23,42,0.18)]">
+                              <div className="flex flex-nowrap justify-center gap-2 whitespace-nowrap">
                                 <button
-                                  className="whitespace-nowrap rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
+                                  className="whitespace-nowrap rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-100"
                                   onClick={() => openCreatePricingOverrideFromRule(rule)}
                                   disabled={pricingSaving || deletingRuleId !== null}
                                 >
                                   {labels.specialPeriod}
                                 </button>
                                 <button
-                                  className="whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
+                                  className="whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
                                   onClick={() => openEditPricingRule(rule)}
                                   disabled={pricingSaving || deletingRuleId !== null}
                                 >
                                   {labels.edit}
                                 </button>
                                 <button
-                                  className="whitespace-nowrap rounded-xl border border-rose-200 px-3.5 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+                                  className="whitespace-nowrap rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
                                   onClick={() => void deletePricingRule(rule.id)}
                                   disabled={pricingSaving || deletingRuleId !== null}
                                 >
@@ -2618,19 +2620,19 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
 
             <div className="mt-5 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_24px_70px_-46px_rgba(15,23,42,0.25)]">
               <div className="overflow-x-auto">
-                <table className="min-w-[1320px] w-full text-sm">
+                <table className="min-w-[1180px] w-full text-sm">
                   <thead className="bg-amber-50/70 text-left text-slate-500">
                     <tr className="border-b border-slate-200">
-                      <th className="w-[280px] px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.route}</th>
-                      <th className="w-[130px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.tripType}</th>
-                      <th className="w-[170px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.vehicleType}</th>
-                      <th className="w-[260px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.specialPeriod}</th>
-                      <th className="w-[120px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.basePrice}</th>
-                      <th className="w-[120px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.nightFee}</th>
-                      <th className="w-[120px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.urgentFee}</th>
-                      <th className="w-[120px] whitespace-nowrap px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.overrideEnabled}</th>
-                      <th className="w-[190px] px-5 py-4 text-xs font-semibold tracking-[0.06em]">{labels.overrideNote}</th>
-                      <th className="w-[170px] whitespace-nowrap px-5 py-4 text-right text-xs font-semibold tracking-[0.06em]">{labels.action}</th>
+                      <th className="w-[230px] px-4 py-4 text-left text-xs font-semibold tracking-[0.06em]">{labels.route}</th>
+                      <th className="w-[110px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.tripType}</th>
+                      <th className="w-[150px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.vehicleType}</th>
+                      <th className="w-[220px] whitespace-nowrap px-3 py-4 text-left text-xs font-semibold tracking-[0.06em]">{labels.specialPeriod}</th>
+                      <th className="w-[110px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.basePrice}</th>
+                      <th className="w-[110px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.nightFee}</th>
+                      <th className="w-[110px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.urgentFee}</th>
+                      <th className="w-[100px] whitespace-nowrap px-3 py-4 text-center text-xs font-semibold tracking-[0.06em]">{labels.overrideEnabled}</th>
+                      <th className="w-[160px] px-3 py-4 text-left text-xs font-semibold tracking-[0.06em]">{labels.overrideNote}</th>
+                      <th className="sticky right-0 z-10 w-[160px] whitespace-nowrap bg-amber-50 px-4 py-4 text-center text-xs font-semibold tracking-[0.06em] shadow-[-10px_0_10px_-10px_rgba(15,23,42,0.18)]">{labels.action}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
@@ -2647,7 +2649,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                     ) : (
                       pricingOverrides.map((override) => (
                         <tr key={override.id} className="align-middle transition hover:bg-amber-50/35">
-                          <td className="px-5 py-5">
+                          <td className="px-4 py-5">
                             <div className="font-semibold leading-6 text-slate-900">
                               {getPricingDisplayValue(override.fromArea)} {"->"} {getPricingDisplayValue(override.toArea)}
                             </div>
@@ -2655,30 +2657,30 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                               {override.fromArea} {"->"} {override.toArea}
                             </div>
                           </td>
-                          <td className="px-5 py-5 align-top">
+                          <td className="px-3 py-5 text-center align-middle">
                             <span className="inline-flex whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
                               {getTripTypeLabel(override.tripType)}
                             </span>
                           </td>
-                          <td className="px-5 py-5 align-top">
+                          <td className="px-3 py-5 text-center align-middle">
                             <span className="inline-flex whitespace-nowrap rounded-full border border-brand-100 bg-brand-50/80 px-2.5 py-1 text-xs font-medium text-brand-700">
                               {labels.vehicles[override.vehicleType.name] || override.vehicleType.name}
                             </span>
                           </td>
-                          <td className="px-5 py-5 align-top text-slate-700">
+                          <td className="px-3 py-5 align-middle text-slate-700">
                             <div className="font-medium">{formatDateTimeJST(override.startsAt, locale)}</div>
                             <div className="mt-1 text-xs text-slate-500">→ {formatDateTimeJST(override.endsAt, locale)}</div>
                           </td>
-                          <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                          <td className="whitespace-nowrap px-3 py-5 text-center align-middle font-semibold tabular-nums text-slate-900">
                             {formatMoneyFromJpy(override.basePriceJpy, currency, locale)}
                           </td>
-                          <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                          <td className="whitespace-nowrap px-3 py-5 text-center align-middle font-semibold tabular-nums text-slate-900">
                             {formatMoneyFromJpy(override.nightFeeJpy, currency, locale)}
                           </td>
-                          <td className="whitespace-nowrap px-5 py-5 text-right font-semibold tabular-nums text-slate-900">
+                          <td className="whitespace-nowrap px-3 py-5 text-center align-middle font-semibold tabular-nums text-slate-900">
                             {formatMoneyFromJpy(override.urgentFeeJpy, currency, locale)}
                           </td>
-                          <td className="px-5 py-5 align-top">
+                          <td className="px-3 py-5 text-center align-middle">
                             <span
                               className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${
                                 override.enabled
@@ -2689,22 +2691,22 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
                               {override.enabled ? labels.enabled : labels.disabled}
                             </span>
                           </td>
-                          <td className="px-5 py-5 align-top text-slate-600">
-                            <div className="max-w-[180px] truncate" title={override.note ?? labels.notProvided}>
+                          <td className="px-3 py-5 align-middle text-slate-600">
+                            <div className="max-w-[150px] truncate" title={override.note ?? labels.notProvided}>
                               {override.note || labels.notProvided}
                             </div>
                           </td>
-                          <td className="px-5 py-5 align-top">
-                            <div className="flex flex-nowrap justify-end gap-2.5 whitespace-nowrap">
+                          <td className="sticky right-0 z-10 bg-white px-4 py-5 align-middle shadow-[-10px_0_10px_-10px_rgba(15,23,42,0.18)]">
+                            <div className="flex flex-nowrap justify-center gap-2 whitespace-nowrap">
                               <button
-                                className="whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3.5 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
+                                className="whitespace-nowrap rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700 transition hover:bg-brand-100"
                                 onClick={() => openEditPricingOverride(override)}
                                 disabled={pricingSaving || deletingOverrideId !== null}
                               >
                                 {labels.edit}
                               </button>
                               <button
-                                className="whitespace-nowrap rounded-xl border border-rose-200 px-3.5 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
+                                className="whitespace-nowrap rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50"
                                 onClick={() => void deletePricingOverride(override.id)}
                                 disabled={pricingSaving || deletingOverrideId !== null}
                               >
