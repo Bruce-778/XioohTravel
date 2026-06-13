@@ -8,6 +8,6 @@ UPDATE vehicle_types
 SET
   seats = 9,
   luggage_medium = 9,
-  description = '适合行李较多或最多 9 人',
+  description = '适合行李较多',
   updated_at = NOW()
 WHERE id = 'large_9' OR name = '9座车（大空间）';

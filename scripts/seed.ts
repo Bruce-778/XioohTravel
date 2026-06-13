@@ -59,7 +59,7 @@ const DEFAULT_VEHICLES: DefaultVehicle[] = [
     luggageSmall: 6,
     luggageMedium: 9,
     luggageLarge: 3,
-    description: "适合行李较多或最多 9 人",
+    description: "适合行李较多",
   },
   {
     preferredId: "luxury_vip",
