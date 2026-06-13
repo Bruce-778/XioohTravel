@@ -19,14 +19,14 @@ const VEHICLES = [
     nameKey: "vehicle.7seats",
     descKey: "vehicle.desc.7seats",
     maxPassengers: 6,
-    luggage: [4, 3],
+    luggage: [2, 3],
   },
   {
     vehicleKey: "9seats",
     nameKey: "vehicle.9seats",
     descKey: "vehicle.desc.9seats",
-    maxPassengers: 8,
-    luggage: [6, 4],
+    maxPassengers: 9,
+    luggage: [6, 9],
   },
   {
     vehicleKey: "luxury",

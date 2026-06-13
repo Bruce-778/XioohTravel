@@ -410,7 +410,7 @@ SELECT
   'business_7',
   '7座车（商务型）',
   6,
-  4,
+  2,
   3,
   2,
   FALSE,
@@ -439,13 +439,13 @@ INSERT INTO vehicle_types (
 SELECT
   'large_9',
   '9座车（大空间）',
-  8,
+  9,
   6,
-  4,
+  9,
   3,
   FALSE,
   FALSE,
-  '适合行李较多或 6-8 人',
+  '适合行李较多或最多 9 人',
   NOW(),
   NOW()
 WHERE NOT EXISTS (
@@ -512,6 +512,20 @@ WHERE NOT EXISTS (
   SELECT 1 FROM vehicle_types WHERE id = 'bus_group' OR name = '大巴车（团体）'
 )
 ON CONFLICT (id) DO NOTHING;
+
+UPDATE vehicle_types
+SET
+  luggage_small = 2,
+  updated_at = NOW()
+WHERE id = 'business_7' OR name = '7座车（商务型）';
+
+UPDATE vehicle_types
+SET
+  seats = 9,
+  luggage_medium = 9,
+  description = '适合行李较多或最多 9 人',
+  updated_at = NOW()
+WHERE id = 'large_9' OR name = '9座车（大空间）';
 
 WITH default_vehicle_prices AS (
   SELECT *

@@ -47,7 +47,7 @@ const DEFAULT_VEHICLES: DefaultVehicle[] = [
     preferredId: "business_7",
     name: "7座车（商务型）",
     seats: 6,
-    luggageSmall: 4,
+    luggageSmall: 2,
     luggageMedium: 3,
     luggageLarge: 2,
     description: "适合家庭/多人出行",
@@ -55,11 +55,11 @@ const DEFAULT_VEHICLES: DefaultVehicle[] = [
   {
     preferredId: "large_9",
     name: "9座车（大空间）",
-    seats: 8,
+    seats: 9,
     luggageSmall: 6,
-    luggageMedium: 4,
+    luggageMedium: 9,
     luggageLarge: 3,
-    description: "适合行李较多或 6-8 人",
+    description: "适合行李较多或最多 9 人",
   },
   {
     preferredId: "luxury_vip",
