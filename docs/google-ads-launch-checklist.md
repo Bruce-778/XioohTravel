@@ -13,13 +13,9 @@
   - `purchase`
   - `contact_whatsapp_click`
   - `contact_email_click`
-- 英文广告落地页：
-  - `/en/tokyo-airport-transfer`
-  - `/en/narita-airport-transfer`
-  - `/en/haneda-airport-transfer`
-  - `/en/kansai-airport-transfer`
-  - `/en/osaka-airport-transfer`
-  - `/en/japan-private-driver`
+- 英文推广入口：
+  - 第一阶段统一使用首页 `https://xioohtravel.com/` 作为广告落地页。
+  - 旧的 `/en/...` 推广 URL 会自动跳转到首页下单区，避免用户进入和主下单体验不一致的页面。
 - `purchase` 事件只在 Stripe 确认支付成功后触发，包含：
   - `transaction_id`
   - `value`
@@ -109,10 +105,7 @@ Search - Tokyo Airport Transfer - EN
 [haneda airport transfer]
 "narita to shinjuku transfer"
 "haneda to shibuya private transfer"
-落地页：
-https://xioohtravel.com/en/tokyo-airport-transfer
-https://xioohtravel.com/en/narita-airport-transfer
-https://xioohtravel.com/en/haneda-airport-transfer
+落地页：https://xioohtravel.com/
 ```
 
 ```text
@@ -124,9 +117,7 @@ Search - Osaka Kansai Transfer - EN
 "kansai airport to osaka"
 "kansai airport to namba"
 "osaka airport transfer"
-落地页：
-https://xioohtravel.com/en/kansai-airport-transfer
-https://xioohtravel.com/en/osaka-airport-transfer
+落地页：https://xioohtravel.com/
 ```
 
 ```text
@@ -138,8 +129,7 @@ Search - Japan Private Driver - EN
 "tokyo private car charter"
 "kyoto private car charter"
 "tokyo to mount fuji private transfer"
-落地页：
-https://xioohtravel.com/en/japan-private-driver
+落地页：https://xioohtravel.com/
 ```
 
 ## 6. 否定关键词
