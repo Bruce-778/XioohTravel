@@ -1,4 +1,5 @@
 import Image from "next/image";
+import type { Metadata } from "next";
 import { SearchForm } from "@/components/SearchForm";
 import { AuthLink } from "@/components/AuthLink";
 import { HomeFaqSection } from "@/components/HomeFaqSection";
@@ -7,6 +8,32 @@ import { HomeTrustSection } from "@/components/HomeTrustSection";
 import { getT } from "@/lib/i18n";
 import { formatJstDateTimeLocalValue } from "@/lib/timeFormat";
 import coverpageImage from "../../coverpage.png";
+
+const BASE_URL = process.env.APP_BASE_URL?.replace(/\/+$/, "") || "https://xioohtravel.com";
+const HOME_TITLE = "XioohTravel | Japan Airport Transfers & Private Driver Service";
+const HOME_DESCRIPTION =
+  "Book Japan airport transfers in Tokyo, Osaka and Kyoto. Choose 5, 7 or 9 seater vehicles, fixed pricing, English support and secure online payment.";
+
+export function generateMetadata(): Metadata {
+  return {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    alternates: { canonical: BASE_URL },
+    openGraph: {
+      title: HOME_TITLE,
+      description: HOME_DESCRIPTION,
+      url: BASE_URL,
+      siteName: "XioohTravel",
+      type: "website",
+      images: [{ url: "/brand/favicon-192.png", width: 192, height: 192 }],
+    },
+    twitter: {
+      card: "summary",
+      title: HOME_TITLE,
+      description: HOME_DESCRIPTION,
+    },
+  };
+}
 
 export default async function HomePage() {
   const { t, locale } = await getT();

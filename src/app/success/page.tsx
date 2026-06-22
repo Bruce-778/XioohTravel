@@ -9,6 +9,7 @@ import {
 } from "@/lib/bookings";
 import { sendPaymentConfirmationEmailIfNeeded } from "@/lib/paymentConfirmation";
 import { retrieveCheckoutSession } from "@/lib/stripe";
+import { DataLayerEventOnMount } from "@/components/TrackedActions";
 
 export default async function SuccessPage({
   searchParams,
@@ -22,12 +23,14 @@ export default async function SuccessPage({
   // Only accept the unguessable Stripe checkout session id; a raw bookingId
   // would let anyone view order details (PII) just by knowing the order number.
   let bookingId: string | null = null;
+  let paymentConfirmed = false;
 
   if (sessionId) {
     try {
       const checkoutSession = await retrieveCheckoutSession(sessionId);
       bookingId = getBookingIdFromCheckoutSession(checkoutSession);
       if (checkoutSession.payment_status === "paid") {
+        paymentConfirmed = true;
         const syncResult = await syncBookingPaymentFromCheckoutSession(checkoutSession);
         if (!syncResult.cancelledButPaid && !syncResult.duplicatePaymentIntentId) {
           await sendPaymentConfirmationEmailIfNeeded(syncResult.bookingId).catch((error) => {
@@ -88,9 +91,26 @@ export default async function SuccessPage({
   const displayVehicle = vehicleTranslationKey
     ? t(`vehicle.${vehicleTranslationKey}`)
     : booking.vehicle_name ?? "-";
+  const isPaidPurchase = paymentConfirmed || booking.stripe_payment_status === "paid";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 flex items-center justify-center py-12 px-4">
+      {isPaidPurchase ? (
+        <DataLayerEventOnMount
+          eventName="purchase"
+          oncePerSessionKey={`purchase.${booking.id}`}
+          eventPayload={{
+            transaction_id: booking.id,
+            value: booking.pricing_total_jpy,
+            currency: "JPY",
+            vehicle_name: displayVehicle,
+            pickup_location: booking.pickup_location,
+            dropoff_location: booking.dropoff_location,
+            route: `${booking.pickup_location} -> ${booking.dropoff_location}`,
+            pickup_time: booking.pickup_time.toISOString(),
+          }}
+        />
+      ) : null}
       <div className="max-w-2xl w-full">
         <div className="card-elevated p-8 sm:p-10 text-center">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 mb-6 shadow-lg animate-scale-in">

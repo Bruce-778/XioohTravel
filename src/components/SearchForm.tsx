@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { canCreateBooking, MIN_BOOKING_LEAD_HOURS } from "@/lib/bookingRules";
+import { buildRoutePayload, pushDataLayerEvent } from "@/lib/analytics";
 import { appendOptionalAddressParams, normalizeOptionalAddress } from "@/lib/locationDisplay";
 import { formatJstDateTimeLocalValue, parseJstDateTime } from "@/lib/timeFormat";
 import { LocationSelector, type LocationSelection } from "./LocationSelector";
@@ -568,6 +569,7 @@ export function SearchForm({ labels, locale = "zh" }: { labels?: Labels; locale?
           return;
         }
         writeSearchDraft(currentDraft);
+        pushDataLayerEvent("search_vehicles", buildRoutePayload(currentDraft));
         router.push(`/vehicles?${query}`);
       }}
     >

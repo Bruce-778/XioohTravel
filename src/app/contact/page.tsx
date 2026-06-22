@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getT } from "@/lib/i18n";
+import { TrackedAnchor } from "@/components/TrackedActions";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
@@ -33,7 +34,16 @@ export default async function ContactPage() {
                   </div>
                   <div>
                     <div className="text-sm font-medium text-slate-400 mb-1">{t("contact.whatsapp")}</div>
-                    <div className="text-xl font-bold tracking-tight">+86-15058024190</div>
+                    <TrackedAnchor
+                      href="https://wa.me/8615058024190"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      eventName="contact_whatsapp_click"
+                      eventPayload={{ contact_channel: "whatsapp", source_area: "contact_panel" }}
+                      className="text-xl font-bold tracking-tight transition hover:text-brand-200"
+                    >
+                      +86-15058024190
+                    </TrackedAnchor>
                   </div>
                 </div>
 
@@ -45,7 +55,14 @@ export default async function ContactPage() {
                   </div>
                   <div>
                     <div className="text-sm font-medium text-slate-400 mb-1">{t("contact.email")}</div>
-                    <div className="text-xl font-bold tracking-tight">support@xioohtravel.com</div>
+                    <TrackedAnchor
+                      href="mailto:support@xioohtravel.com"
+                      eventName="contact_email_click"
+                      eventPayload={{ contact_channel: "email", source_area: "contact_panel" }}
+                      className="text-xl font-bold tracking-tight transition hover:text-brand-200"
+                    >
+                      support@xioohtravel.com
+                    </TrackedAnchor>
                   </div>
                 </div>
               </div>
@@ -67,14 +84,16 @@ export default async function ContactPage() {
                   </div>
                   <div className="text-2xl font-bold text-slate-900 mb-2">WhatsApp</div>
                   <div className="text-slate-500 font-medium">+86-15058024190</div>
-                  <a 
+                  <TrackedAnchor
                     href="https://wa.me/8615058024190" 
                     target="_blank" 
                     rel="noopener noreferrer"
+                    eventName="contact_whatsapp_click"
+                    eventPayload={{ contact_channel: "whatsapp", source_area: "contact_cta" }}
                     className="mt-6 px-8 py-3 rounded-xl bg-emerald-500 text-white font-bold hover:bg-emerald-600 transition-colors shadow-md hover:shadow-lg active:scale-95"
                   >
                     Chat Now
-                  </a>
+                  </TrackedAnchor>
                 </div>
 
                 <div className="p-6 rounded-3xl bg-brand-50 border border-brand-100 flex items-center gap-4 shadow-sm">

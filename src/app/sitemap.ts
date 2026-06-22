@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { adLandingPages } from "@/lib/adLandingPages";
 
 const BASE_URL = process.env.APP_BASE_URL?.replace(/\/+$/, "") || "https://xioohtravel.com";
 
@@ -12,6 +13,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: "/contact", priority: 0.6 },
     { path: "/privacy", priority: 0.3 },
     { path: "/terms", priority: 0.3 },
+    ...adLandingPages.map((page) => ({ path: `/en/${page.slug}`, priority: 0.85 })),
   ];
 
   return routes.map(({ path, priority }) => ({

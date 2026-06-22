@@ -15,6 +15,7 @@ import {
 import { getVehicleImageByKey } from "@/lib/vehicleImages";
 import { getEffectivePricingRulesForRoute } from "@/lib/effectivePricing";
 import { LuggageCapacityDisplay, type LuggageDisplayLabels } from "@/components/LuggageCapacityDisplay";
+import { TrackedLink } from "@/components/TrackedActions";
 
 function formatPassengerSummary({
   passengers,
@@ -289,12 +290,28 @@ export default async function VehiclesPage({
                         {t("vehicles.capacityLimit")}
                       </button>
                     ) : (
-                      <Link
+                      <TrackedLink
                         href={checkoutUrl}
+                        eventName="select_vehicle"
+                        eventPayload={{
+                          trip_type: q.tripType,
+                          from_area: q.fromArea,
+                          to_area: q.toArea,
+                          route: `${q.fromArea} -> ${q.toArea}`,
+                          pickup_time: q.pickupTime,
+                          passengers: q.passengers,
+                          children: q.children,
+                          luggage_small: q.luggageSmall,
+                          luggage_medium: q.luggageMedium,
+                          vehicle_type_id: v.id,
+                          vehicle_name: vehicleLabel,
+                          value: priceJpy,
+                          currency: "JPY",
+                        }}
                         className="w-full px-6 py-2.5 rounded-xl bg-slate-900 text-white font-semibold text-center hover:bg-slate-800 transition-all active:scale-[0.98] shadow-sm"
                       >
                         {t("vehicles.bookNow")}
-                      </Link>
+                      </TrackedLink>
                     )}
                   </>
                 ) : (

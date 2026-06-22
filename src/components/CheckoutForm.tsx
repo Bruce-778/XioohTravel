@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatMoneyFromJpy } from "@/lib/currencyClient";
 import type { Currency } from "@/lib/currency";
+import { pushDataLayerEvent } from "@/lib/analytics";
 import { CHILD_SEAT_FEE_JPY, MEET_AND_GREET_SIGN_FEE_JPY } from "@/lib/bookingRules";
 import {
   PHONE_COUNTRY_CODE_OPTIONS,
@@ -500,6 +501,7 @@ export function CheckoutForm({
   });
   const phoneFieldRef = useRef<HTMLDivElement>(null);
   const phoneLocalInputRef = useRef<HTMLInputElement>(null);
+  const beginCheckoutTrackedRef = useRef(false);
 
   const phoneCountryOptions = useMemo(() => {
     const localeTag = locale.startsWith("zh") ? "zh-CN" : "en";
@@ -668,6 +670,39 @@ export function CheckoutForm({
     };
   }, [childSeats, meetAndGreetSignCount, summary.baseJpy]);
 
+  useEffect(() => {
+    if (beginCheckoutTrackedRef.current) return;
+    beginCheckoutTrackedRef.current = true;
+
+    pushDataLayerEvent("begin_checkout", {
+      trip_type: preset.tripType,
+      from_area: preset.fromArea,
+      to_area: preset.toArea,
+      route: `${preset.fromArea} -> ${preset.toArea}`,
+      pickup_time: preset.pickupTime,
+      passengers: preset.passengers,
+      children: preset.children ?? 0,
+      luggage_small: preset.luggageSmall,
+      luggage_medium: preset.luggageMedium,
+      vehicle_type_id: preset.vehicleTypeId,
+      vehicle_name: summary.displayVehicle,
+      value: pricing.totalJpy,
+      currency: "JPY",
+    });
+  }, [
+    preset.children,
+    preset.fromArea,
+    preset.luggageMedium,
+    preset.luggageSmall,
+    preset.passengers,
+    preset.pickupTime,
+    preset.toArea,
+    preset.tripType,
+    preset.vehicleTypeId,
+    pricing.totalJpy,
+    summary.displayVehicle,
+  ]);
+
   const payload = useMemo(
     () => ({
       tripType: preset.tripType,
@@ -791,6 +826,21 @@ export function CheckoutForm({
             return;
           }
 
+          pushDataLayerEvent("checkout_submit", {
+            trip_type: preset.tripType,
+            from_area: preset.fromArea,
+            to_area: preset.toArea,
+            route: `${preset.fromArea} -> ${preset.toArea}`,
+            pickup_time: preset.pickupTime,
+            passengers: preset.passengers,
+            children: preset.children ?? 0,
+            luggage_small: preset.luggageSmall,
+            luggage_medium: preset.luggageMedium,
+            vehicle_type_id: preset.vehicleTypeId,
+            vehicle_name: summary.displayVehicle,
+            value: pricing.totalJpy,
+            currency: "JPY",
+          });
           setLoading(true);
           const controller = new AbortController();
           const timeoutId = window.setTimeout(() => controller.abort(), 30_000);

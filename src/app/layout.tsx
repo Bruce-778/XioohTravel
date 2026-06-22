@@ -5,24 +5,26 @@ import { MobileNav } from "@/components/MobileNav";
 import { Footer } from "@/components/Footer";
 import { getT } from "@/lib/i18n";
 import { getCurrency } from "@/lib/currency";
+import { GoogleTagManager, GoogleTagManagerNoScript } from "@/components/GoogleTagManager";
 
 const BASE_URL = process.env.APP_BASE_URL?.replace(/\/+$/, "") || "https://xioohtravel.com";
+const HOME_TITLE = "XioohTravel | Japan Airport Transfers & Private Driver Service";
+const HOME_DESCRIPTION =
+  "Book Japan airport transfers in Tokyo, Osaka and Kyoto. Choose 5, 7 or 9 seater vehicles, fixed pricing, English support and secure online payment.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
-  const title = `${t("brand.name")} - ${t("brand.tagline")}`;
-  const description = t("home.subtitle");
 
   return {
     metadataBase: new URL(BASE_URL),
     title: {
-      default: title,
+      default: HOME_TITLE,
       template: `%s | ${t("brand.name")}`,
     },
-    description,
+    description: HOME_DESCRIPTION,
     openGraph: {
-      title,
-      description,
+      title: HOME_TITLE,
+      description: HOME_DESCRIPTION,
       url: BASE_URL,
       siteName: t("brand.name"),
       type: "website",
@@ -30,8 +32,8 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     twitter: {
       card: "summary",
-      title,
-      description,
+      title: HOME_TITLE,
+      description: HOME_DESCRIPTION,
     },
     icons: {
       icon: [
@@ -47,9 +49,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { locale, t } = await getT();
   const currency = await getCurrency();
+  const gtmId = process.env.NEXT_PUBLIC_GTM_ID;
   return (
     <html lang={locale === "en" ? "en" : "zh-CN"}>
       <body>
+        <GoogleTagManager gtmId={gtmId} />
+        <GoogleTagManagerNoScript gtmId={gtmId} />
         <div className="min-h-screen flex flex-col">
           <Navbar
             locale={locale}

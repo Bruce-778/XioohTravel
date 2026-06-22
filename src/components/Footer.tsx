@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getT } from "@/lib/i18n";
+import { TrackedAnchor } from "@/components/TrackedActions";
 
 const SUPPORT_EMAIL = "support@xioohtravel.com";
 const SUPPORT_PHONE = "+86-15058024190";
@@ -9,6 +10,8 @@ type FooterLink = {
   href: string;
   label: string;
   external?: boolean;
+  trackingEvent?: string;
+  trackingSource?: string;
 };
 
 function FooterColumn({
@@ -27,14 +30,19 @@ function FooterColumn({
         {links.map((link) => (
           <li key={`${link.href}-${link.label}`}>
             {link.external ? (
-              <a
+              <TrackedAnchor
                 href={link.href}
                 target="_blank"
                 rel="noopener noreferrer"
+                eventName={link.trackingEvent ?? "external_footer_click"}
+                eventPayload={{
+                  contact_channel: link.href.startsWith("mailto:") ? "email" : "whatsapp",
+                  source_area: link.trackingSource ?? "footer_column",
+                }}
                 className="text-sm font-semibold text-white transition hover:text-[#cfcfcf]"
               >
                 {link.label}
-              </a>
+              </TrackedAnchor>
             ) : (
               <Link
                 href={link.href}
@@ -77,8 +85,18 @@ export async function Footer() {
   const { t } = await getT();
   const year = new Date().getFullYear();
   const contactLinks: FooterLink[] = [
-    { href: WHATSAPP_URL, label: t("footer.whatsapp"), external: true },
-    { href: `mailto:${SUPPORT_EMAIL}`, label: t("footer.email"), external: true },
+    {
+      href: WHATSAPP_URL,
+      label: t("footer.whatsapp"),
+      external: true,
+      trackingEvent: "contact_whatsapp_click",
+    },
+    {
+      href: `mailto:${SUPPORT_EMAIL}`,
+      label: t("footer.email"),
+      external: true,
+      trackingEvent: "contact_email_click",
+    },
     { href: "/orders", label: t("footer.myOrders") },
     { href: "/about", label: t("footer.about") },
   ];
@@ -109,17 +127,24 @@ export async function Footer() {
             </h2>
             <div className="mt-5 space-y-3.5 text-sm font-semibold leading-6 text-[#9b9b9b]">
               <p>{t("footer.serviceArea")}</p>
-              <a href={`mailto:${SUPPORT_EMAIL}`} className="block transition hover:text-white">
+              <TrackedAnchor
+                href={`mailto:${SUPPORT_EMAIL}`}
+                eventName="contact_email_click"
+                eventPayload={{ contact_channel: "email", source_area: "footer_brand" }}
+                className="block transition hover:text-white"
+              >
                 {SUPPORT_EMAIL}
-              </a>
-              <a
+              </TrackedAnchor>
+              <TrackedAnchor
                 href={WHATSAPP_URL}
                 target="_blank"
                 rel="noopener noreferrer"
+                eventName="contact_whatsapp_click"
+                eventPayload={{ contact_channel: "whatsapp", source_area: "footer_brand" }}
                 className="block transition hover:text-white"
               >
                 {SUPPORT_PHONE}
-              </a>
+              </TrackedAnchor>
             </div>
           </div>
         </div>
