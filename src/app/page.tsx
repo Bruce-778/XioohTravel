@@ -106,9 +106,13 @@ export default async function HomePage() {
               {t("home.badge")}
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight">
-              <span className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text text-transparent">
-                {t("home.title")}
+            <h1
+              aria-label={t("home.title")}
+              className="text-[1.6rem] sm:text-[2.25rem] lg:text-[2.45rem] xl:text-[2.65rem] font-bold leading-[1.12] tracking-normal"
+            >
+              <span className="block max-w-full overflow-visible bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 bg-clip-text pb-1 text-transparent">
+                <span className="block whitespace-nowrap">{t("home.title.line1")}</span>
+                <span className="block whitespace-nowrap">{t("home.title.line2")}</span>
               </span>
             </h1>
 

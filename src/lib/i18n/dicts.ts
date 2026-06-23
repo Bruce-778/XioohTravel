@@ -22,7 +22,9 @@ export const dicts: Record<Locale, Dict> = {
     "currency.usd": "美元 USD",
 
     "home.badge": "固定价格 · 中英文客服 · 多车型可选",
-    "home.title": "XioohTravel 机场接送预订",
+    "home.title": "XioohTravel 日本机场接送预订",
+    "home.title.line1": "XioohTravel 日本机场",
+    "home.title.line2": "接送预订",
     "home.subtitle":
       "像 Ctrip / Klook 一样快速下单：填写航班、上车点、下车点、人数行李，选择车型即可完成预订。",
     "home.chip.urgent": "至少提前 12 小时预订",
@@ -817,7 +819,9 @@ export const dicts: Record<Locale, Dict> = {
     "currency.usd": "USD",
 
     "home.badge": "Fixed price · Support · Multiple vehicle options",
-    "home.title": "XioohTravel Airport Transfer Booking",
+    "home.title": "XioohTravel Japan Airport Transfer Booking",
+    "home.title.line1": "XioohTravel Japan",
+    "home.title.line2": "Airport Transfer Booking",
     "home.subtitle":
       "Book like Ctrip / Klook: enter flight info, pickup & drop-off, passengers & luggage, then choose a vehicle.",
     "home.chip.urgent": "Book at least 12 hours in advance",
