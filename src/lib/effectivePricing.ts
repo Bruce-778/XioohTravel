@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getPricingAreaCode } from "@/lib/locationData";
+import { getPricingAreaCodeFromCandidates } from "@/lib/locationData";
 import { parseJstDateTime } from "@/lib/timeFormat";
 
 export type EffectivePricingRule = {
@@ -34,6 +34,8 @@ type PricingOverrideRow = PricingBaseRow & {
 type EffectivePricingInput = {
   fromArea: string;
   toArea: string;
+  fromAddress?: string | null;
+  toAddress?: string | null;
   tripType: string;
   vehicleTypeId: string;
   pickupTime: Date | string;
@@ -41,8 +43,8 @@ type EffectivePricingInput = {
 
 type EffectivePricingRouteInput = Omit<EffectivePricingInput, "vehicleTypeId">;
 
-function normalizeArea(value: string) {
-  return getPricingAreaCode(value).trim();
+function normalizeArea(...values: Array<string | null | undefined>) {
+  return getPricingAreaCodeFromCandidates(...values).trim();
 }
 
 function toPricingInstant(value: Date | string) {
@@ -93,12 +95,14 @@ function mapOverrideRule(row: PricingOverrideRow): EffectivePricingRule {
 export async function getEffectivePricingRule({
   fromArea,
   toArea,
+  fromAddress,
+  toAddress,
   tripType,
   vehicleTypeId,
   pickupTime,
 }: EffectivePricingInput): Promise<EffectivePricingRule | null> {
-  const normalizedFromArea = normalizeArea(fromArea);
-  const normalizedToArea = normalizeArea(toArea);
+  const normalizedFromArea = normalizeArea(fromArea, fromAddress);
+  const normalizedToArea = normalizeArea(toArea, toAddress);
   const pricingInstant = toPricingInstant(pickupTime);
 
   let overrideRows: PricingOverrideRow[] = [];
@@ -149,11 +153,13 @@ export async function getEffectivePricingRule({
 export async function getEffectivePricingRulesForRoute({
   fromArea,
   toArea,
+  fromAddress,
+  toAddress,
   tripType,
   pickupTime,
 }: EffectivePricingRouteInput): Promise<EffectivePricingRule[]> {
-  const normalizedFromArea = normalizeArea(fromArea);
-  const normalizedToArea = normalizeArea(toArea);
+  const normalizedFromArea = normalizeArea(fromArea, fromAddress);
+  const normalizedToArea = normalizeArea(toArea, toAddress);
   const pricingInstant = toPricingInstant(pickupTime);
 
   const baseRulesPromise = db.query(

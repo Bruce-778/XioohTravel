@@ -5,7 +5,7 @@ function getDatabaseUrl() {
     return process.env.DATABASE_URL || process.env.DIRECT_URL;
   }
 
-  return process.env.DIRECT_URL || process.env.DATABASE_URL;
+  return process.env.DATABASE_URL || process.env.DIRECT_URL;
 }
 
 function shouldUseSsl(connectionString: string | undefined): PoolConfig["ssl"] {

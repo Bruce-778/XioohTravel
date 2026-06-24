@@ -36,5 +36,5 @@ export function computeNightFee(pickupTime: Date) {
       timeZone: JAPAN_TZ,
     }).format(pickupTime)
   );
-  return h >= 22 || h < 6;
+  return h >= 21 || h < 6;
 }

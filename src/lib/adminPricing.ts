@@ -184,6 +184,29 @@ export function buildVehicleLookup(vehicles: VehicleLookupRow[]) {
       keys.add(`${vehicle.seats}-seater`);
     }
 
+    const namedSeatMatch = vehicle.name.match(/(\d+)\s*座/);
+    if (namedSeatMatch?.[1]) {
+      keys.add(namedSeatMatch[1]);
+      keys.add(`${namedSeatMatch[1]}座`);
+      keys.add(`${namedSeatMatch[1]}座车`);
+    }
+
+    if (vehicle.id === "large_9") {
+      keys.add("10");
+      keys.add("10座");
+      keys.add("10座车");
+      keys.add("10 seats");
+      keys.add("10 seater");
+    }
+
+    if (vehicle.id === "bus_group") {
+      keys.add("18");
+      keys.add("18座");
+      keys.add("18座车");
+      keys.add("18 seats");
+      keys.add("18 seater");
+    }
+
     for (const key of keys) {
       lookup.set(key, vehicle);
     }

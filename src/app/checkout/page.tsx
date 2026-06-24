@@ -123,9 +123,13 @@ export default async function CheckoutPage({
     );
   }
 
+  const defaultPickupLocation = getDisplayLocation(q.fromArea, addressParams.fromAddress, locale);
+  const defaultDropoffLocation = getDisplayLocation(q.toArea, addressParams.toAddress, locale);
   const rule = await getEffectivePricingRule({
     fromArea: q.fromArea,
     toArea: q.toArea,
+    fromAddress: addressParams.fromAddress ?? defaultPickupLocation,
+    toAddress: addressParams.toAddress ?? defaultDropoffLocation,
     tripType: q.tripType,
     vehicleTypeId: vehicle.id,
     pickupTime,
@@ -149,8 +153,6 @@ export default async function CheckoutPage({
   const base = rule.basePriceJpy;
   const night = isNight ? rule.nightFeeJpy : 0;
   const urgent = isUrgent ? rule.urgentFeeJpy : 0;
-  const defaultPickupLocation = getDisplayLocation(q.fromArea, addressParams.fromAddress, locale);
-  const defaultDropoffLocation = getDisplayLocation(q.toArea, addressParams.toAddress, locale);
   const vehicleTranslationKey = vehicleKeyMap[vehicle.name];
   const displayVehicle = vehicleTranslationKey ? t(`vehicle.${vehicleTranslationKey}`) : vehicle.name;
 

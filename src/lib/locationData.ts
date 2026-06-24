@@ -1,6 +1,12 @@
+import {
+  PRICING_ZONES,
+  findPricingZoneByInput,
+  getPricingZoneByCode,
+} from "@/lib/pricingZones";
+
 // 机场、航站楼、热门区域、酒店数据
 
-export type AirportCode = "NRT" | "HND" | "KIX" | "NGO" | "CTS";
+export type AirportCode = "NRT" | "HND" | "KIX" | "ITM" | "NGO" | "CTS";
 
 export interface AirportTerminal {
   code: AirportCode;
@@ -51,6 +57,11 @@ export const AIRPORTS: AirportTerminal[] = [
       { code: "T1", name: { zh: "第1航站楼", en: "Terminal 1" } },
       { code: "T2", name: { zh: "第2航站楼", en: "Terminal 2" } }
     ]
+  },
+  {
+    code: "ITM",
+    name: { zh: "伊丹机场（大阪国际机场）", en: "Itami Airport (Osaka International Airport)" },
+    terminals: [{ code: "T1", name: { zh: "航站楼", en: "Terminal" } }]
   },
   {
     code: "NGO",
@@ -123,6 +134,7 @@ const AIRPORT_ALIASES: Record<AirportCode, string[]> = {
   NRT: ["narita", "narita airport", "narita international airport", "成田机场", "成田国际机场"],
   HND: ["haneda", "haneda airport", "tokyo haneda airport", "羽田机场", "东京羽田机场"],
   KIX: ["kansai", "kansai airport", "kansai international airport", "关西机场", "关西国际机场"],
+  ITM: ["itami", "itami airport", "osaka international airport", "伊丹机场", "伊丹空港", "大阪国际机场", "大阪国際空港"],
   NGO: ["centrair", "chubu", "chubu airport", "chubu centrair", "chubu centrair international airport", "中部机场", "中部国际机场"],
   CTS: ["new chitose", "new chitose airport", "sapporo airport", "新千岁机场"]
 };
@@ -349,6 +361,7 @@ export function isKnownPricingLocationInput(input: string) {
   return Boolean(
     findAirportByInput(input) ||
       findHotelByInput(input) ||
+      findPricingZoneByInput(input) ||
       findPricingAreaByInput(input)
   );
 }
@@ -359,7 +372,16 @@ export function searchLocations(query: string, locale: string = "zh"): Array<Pop
   const normalizedQuery = normalizeLocationInput(query);
   const isZh = locale.startsWith("zh");
   const results: Array<PopularArea | PopularHotel> = [];
+  const matchedPricingZone = findPricingZoneByInput(query);
   const matchedArea = findPricingAreaByInput(query);
+
+  if (matchedPricingZone) {
+    results.push({
+      code: matchedPricingZone.code,
+      name: matchedPricingZone.name,
+      city: matchedPricingZone.city,
+    });
+  }
 
   if (matchedArea) {
     results.push(matchedArea);
@@ -390,27 +412,56 @@ export function searchLocations(query: string, locale: string = "zh"): Array<Pop
 /**
  * 从选中的地点字符串中提取用于匹配报价规则的代码
  * 1. 机场相关输入统一归一化为机场代码，例如 NRT / Narita airport -> NRT
- * 2. 热门酒店返回其所属区域代码
- * 3. 热门区域统一归一化为区域代码
+ * 2. 真实报价覆盖区统一归一化为 canonical pricing zone，例如 TOKYO_SHINJUKU / OSAKA_CITY
+ * 3. 热门酒店、热门区域会继续映射到其所在真实报价覆盖区
  * 4. 未知区域按原始文本（trim 后）保留，支持自定义价格区域
  */
 export function getPricingAreaCode(location: string): string {
-  const trimmed = location.trim();
+  return getPricingAreaCodeFromCandidates(location);
+}
+
+export function getPricingAreaCodeFromCandidates(
+  ...locations: Array<string | null | undefined>
+): string {
+  const values = locations
+    .map((location) => (typeof location === "string" ? location.trim() : ""))
+    .filter(Boolean);
+  const trimmed = values[0] ?? "";
   if (!trimmed) return "";
 
-  const airport = findAirportByInput(trimmed);
-  if (airport) {
-    return airport.code;
+  for (const value of values) {
+    const airport = findAirportByInput(value);
+    if (airport) {
+      return airport.code;
+    }
   }
 
-  const area = findAreaByInput(trimmed);
-  if (area) return area.code;
+  for (const value of values) {
+    const pricingZone = findPricingZoneByInput(value);
+    if (pricingZone) {
+      return pricingZone.code;
+    }
+  }
 
-  const hotel = findHotelByInput(trimmed);
-  if (hotel) return hotel.area;
+  for (const value of values) {
+    const hotel = findHotelByInput(value);
+    if (hotel) {
+      const hotelZone = findPricingZoneByInput(hotel.area);
+      return hotelZone?.code ?? hotel.area;
+    }
+  }
 
-  const pricingArea = findPricingAreaByInput(trimmed);
-  if (pricingArea) return pricingArea.code;
+  for (const value of values) {
+    const pricingArea = findPricingAreaByInput(value);
+    if (pricingArea) {
+      const areaZone = findPricingZoneByInput([
+        pricingArea.code,
+        pricingArea.name.en,
+        pricingArea.name.zh,
+      ].join(" "));
+      return areaZone?.code ?? pricingArea.code;
+    }
+  }
 
   return trimmed;
 }
@@ -423,6 +474,11 @@ export function getLocalizedLocation(location: string, locale: string = "zh"): s
   if (!trimmed) return "";
 
   const isZh = locale.startsWith("zh");
+
+  const pricingZone = getPricingZoneByCode(trimmed);
+  if (pricingZone) {
+    return isZh ? pricingZone.name.zh : pricingZone.name.en;
+  }
 
   const airportMatch = trimmed.match(/^([A-Z]{3})\s+([A-Z0-9]+)(\s+-\s+(.+))?$/);
   if (airportMatch) {

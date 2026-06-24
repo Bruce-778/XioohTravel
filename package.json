@@ -8,6 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "check:i18n": "tsx scripts/check-i18n.ts",
+    "check:locations": "tsx scripts/check-location-normalization.ts",
+    "check:booking-rules": "tsx scripts/check-booking-rules.ts",
+    "check:real-pricing": "tsx scripts/check-real-pricing.ts",
+    "check:user-pricing-flows": "tsx scripts/check-user-pricing-flows.ts",
     "init-db": "tsx scripts/init-db.ts",
     "inspect:payment-confirmation": "tsx scripts/inspect-payment-confirmation.ts",
     "patch:bookings-payment-columns": "tsx scripts/patch-bookings-payment-columns.ts",
@@ -16,6 +20,7 @@
     "retry:merchant-order-email": "tsx scripts/retry-merchant-order-email.ts",
     "retry:payment-confirmation-email": "tsx scripts/retry-payment-confirmation-email.ts",
     "sync:stripe-fee": "tsx scripts/sync-stripe-fee.ts",
+    "sync:real-pricing": "tsx scripts/sync-real-pricing.ts",
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {

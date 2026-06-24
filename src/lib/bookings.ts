@@ -123,6 +123,8 @@ export async function calculateBookingSnapshot(data: CreateBookingInput) {
   const rule = await getEffectivePricingRule({
     fromArea: data.fromArea,
     toArea: data.toArea,
+    fromAddress: data.pickupLocation,
+    toAddress: data.dropoffLocation,
     tripType: data.tripType,
     vehicleTypeId: data.vehicleTypeId,
     pickupTime,

@@ -140,6 +140,8 @@ export default async function VehiclesPage({
   const rules = await getEffectivePricingRulesForRoute({
     fromArea: q.fromArea,
     toArea: q.toArea,
+    fromAddress: addressParams.fromAddress,
+    toAddress: addressParams.toAddress,
     tripType: q.tripType,
     pickupTime,
   });

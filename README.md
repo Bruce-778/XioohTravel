@@ -22,13 +22,16 @@ npm run init-db
 
 也可以直接把 `scripts/sql/supabase-safe-init.sql` 粘贴到 Supabase SQL Editor 执行。
 
-### 4) 可选：写入演示车型 / 演示价格
-这一步同样是保守策略：
-- 只补缺失车型
-- 只有当 `pricing_rules` 为空时才写入演示价格
+### 4) 可选：写入真实车型 / 真实基础价格
+这一步会补齐当前系统使用的真实车型，并按 `定价表.xlsx` 的报价补齐或更新真实基础价格。
 
 ```bash
 npm run seed
+```
+
+如需彻底移除旧测试报价和旧价格覆盖，再写入完整真实报价，请执行：
+```bash
+npm run sync:real-pricing -- --commit
 ```
 
 ### 5) 启动开发服务器

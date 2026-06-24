@@ -40,11 +40,11 @@ export function formatMoneyFromJpy(amountJpy: number, currency: Currency, locale
   const value = convertFromJpy(amountJpy, currency);
   const isJpy = currency === "JPY";
   const digits = isJpy ? 0 : 2;
+  const displayValue = isJpy ? Math.round(value) : value;
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     maximumFractionDigits: digits,
     minimumFractionDigits: digits
-  }).format(value);
+  }).format(displayValue);
 }
-
