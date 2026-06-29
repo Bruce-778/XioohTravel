@@ -119,20 +119,23 @@ cp env.example .env
 | 变量 | 说明 |
 | --- | --- |
 | `DATABASE_URL` | PostgreSQL / Supabase 连接字符串。 |
+| `DIRECT_URL` | 可选备用连接字符串；生产建议与 Supabase pooler/直连策略保持一致。 |
 | `JWT_SECRET` | JWT 签名密钥，至少 32 位字符。可用 `openssl rand -hex 32` 生成。 |
 | `ADMIN_EMAILS` | 管理员邮箱白名单，多个邮箱用英文逗号分隔。 |
 | `ADMIN_TOKEN` | 后台二次验证口令。代码也兼容旧变量名 `ADMIN_SECRET_KEY`。 |
 | `APP_BASE_URL` | 应用访问地址，Stripe 回跳和邮件链接会使用它。 |
+| `STRIPE_SECRET_KEY` | Stripe 服务端密钥，用于创建 Checkout 和退款。 |
+| `STRIPE_WEBHOOK_SECRET` | Stripe Webhook 签名密钥。 |
+| `RESEND_API_KEY` | Resend API Key，用于发送验证码、支付确认和退款通知邮件。 |
+| `BOOKING_EMAIL_FROM` | 订单邮件发件人。生产环境应使用已验证域名，不要使用 Resend sandbox 发件人。 |
+| `MERCHANT_EMAILS` | 商家/运营通知邮箱，多个邮箱用英文逗号分隔；用于新订单、退款和异常告警。 |
 
 按需配置：
 
 | 变量 | 说明 |
 | --- | --- |
-| `STRIPE_SECRET_KEY` | Stripe 服务端密钥，用于创建 Checkout 和退款。 |
-| `STRIPE_WEBHOOK_SECRET` | Stripe Webhook 签名密钥。 |
-| `RESEND_API_KEY` | Resend API Key，用于发送验证码、支付确认和退款通知邮件。 |
-| `BOOKING_EMAIL_FROM` | 订单邮件发件人。 |
 | `BOOKING_EMAIL_REPLY_TO` | 订单邮件回复地址。 |
+| `BOOKING_EMAIL_TEST_TO` / `AUTH_EMAIL_TEST_TO` | Resend sandbox 测试收件人；生产验证域名后通常留空。 |
 | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Maps / Places 自动补全。 |
 | `NEXT_PUBLIC_GTM_ID` | Google Tag Manager 容器 ID。 |
 | `USD_PER_JPY` / `CNY_PER_JPY` | 可选汇率配置；未配置时使用代码内置兜底汇率。 |

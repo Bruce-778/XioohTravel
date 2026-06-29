@@ -1,5 +1,4 @@
 import {
-  PRICING_ZONES,
   findPricingZoneByInput,
   getPricingZoneByCode,
 } from "@/lib/pricingZones";

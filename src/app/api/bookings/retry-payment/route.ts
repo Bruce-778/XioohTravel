@@ -15,11 +15,28 @@ import {
   isStripeCheckoutUnavailableError,
   retrieveCheckoutSession,
 } from "@/lib/stripe";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+
+const RETRY_PAYMENT_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RETRY_PAYMENT_IP_RATE_LIMIT = 20;
+const RETRY_PAYMENT_USER_RATE_LIMIT = 10;
 
 export async function POST(req: Request) {
   const { t } = await getT();
 
   try {
+    const ipLimit = checkRateLimit(
+      `booking-retry:${getClientIp(req)}`,
+      RETRY_PAYMENT_IP_RATE_LIMIT,
+      RETRY_PAYMENT_RATE_LIMIT_WINDOW_MS
+    );
+    if (!ipLimit.ok) {
+      return NextResponse.json(
+        { error: t("api.tooManyRequests") },
+        { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } }
+      );
+    }
+
     const json = await req.json();
     const parsed = RetryPaymentSchema.safeParse(json);
     if (!parsed.success) {
@@ -29,6 +46,17 @@ export async function POST(req: Request) {
     const session = await getSession();
     if (!session) {
       return NextResponse.json({ error: t("api.unauthorized") }, { status: 401 });
+    }
+    const userLimit = checkRateLimit(
+      `booking-retry-user:${session.userId}`,
+      RETRY_PAYMENT_USER_RATE_LIMIT,
+      RETRY_PAYMENT_RATE_LIMIT_WINDOW_MS
+    );
+    if (!userLimit.ok) {
+      return NextResponse.json(
+        { error: t("api.tooManyRequests") },
+        { status: 429, headers: { "Retry-After": String(userLimit.retryAfterSeconds) } }
+      );
     }
 
     const booking = await getBookingById(parsed.data.bookingId);

@@ -92,6 +92,15 @@ export default async function SuccessPage({
     ? t(`vehicle.${vehicleTranslationKey}`)
     : booking.vehicle_name ?? "-";
   const isPaidPurchase = paymentConfirmed || booking.stripe_payment_status === "paid";
+  const purchaseItems = [
+    {
+      item_id: booking.vehicle_name ?? "airport_transfer",
+      item_name: displayVehicle,
+      item_category: "airport_transfer",
+      price: booking.pricing_total_jpy,
+      quantity: 1,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 flex items-center justify-center py-12 px-4">
@@ -104,6 +113,13 @@ export default async function SuccessPage({
             value: booking.pricing_total_jpy,
             currency: "JPY",
             vehicle_name: displayVehicle,
+            items: purchaseItems,
+            ecommerce: {
+              transaction_id: booking.id,
+              value: booking.pricing_total_jpy,
+              currency: "JPY",
+              items: purchaseItems,
+            },
             pickup_location: booking.pickup_location,
             dropoff_location: booking.dropoff_location,
             route: `${booking.pickup_location} -> ${booking.dropoff_location}`,

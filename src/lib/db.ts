@@ -34,17 +34,26 @@ function shouldUseSsl(connectionString: string | undefined): PoolConfig["ssl"] {
   return false;
 }
 
-const connectionString = getDatabaseUrl();
+let pool: Pool | null = null;
 
-const pool = new Pool({
-  connectionString,
-  ssl: shouldUseSsl(connectionString),
-  connectionTimeoutMillis: 8_000,
-});
+export function getDbPool() {
+  if (!pool) {
+    const connectionString = getDatabaseUrl();
+    pool = new Pool({
+      connectionString,
+      ssl: shouldUseSsl(connectionString),
+      connectionTimeoutMillis: 15_000,
+    });
+  }
+
+  return pool;
+}
 
 export const db = {
-  query: (text: string, params?: any[]) => pool.query(text, params),
-  pool,
+  query: (text: string, params?: any[]) => getDbPool().query(text, params),
+  get pool() {
+    return getDbPool();
+  },
 };
 
 export default db;

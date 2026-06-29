@@ -4,7 +4,9 @@ import { normalizeEmailAddress } from "@/lib/email";
 const DEFAULT_ADMIN_EMAIL = "bruce031103@gmail.com";
 
 export function getAdminEmails() {
-  const rawEmails = process.env.ADMIN_EMAILS?.trim() || DEFAULT_ADMIN_EMAIL;
+  const configuredEmails = process.env.ADMIN_EMAILS?.trim();
+  const rawEmails =
+    configuredEmails || (process.env.NODE_ENV === "production" ? "" : DEFAULT_ADMIN_EMAIL);
 
   return rawEmails
     .split(",")

@@ -980,7 +980,7 @@ export function AdminClient({ labels, locale = "zh-CN" }: { labels: Labels; loca
         } else {
           setAdminAccessStatus("unauthenticated");
         }
-      } catch (err) {
+      } catch {
         setToken("");
         setAdminAccessStatus("unauthenticated");
       } finally {

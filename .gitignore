@@ -5,6 +5,7 @@ build/
 .env
 .env*.local
 .DS_Store
+.local-backups/
 
 # Prisma
 prisma/*.db

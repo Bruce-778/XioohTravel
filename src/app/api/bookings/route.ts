@@ -9,7 +9,12 @@ import {
   deleteBookingIfPending,
   linkBookingEmailToUser,
 } from "@/lib/bookings";
+import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
 import { createBookingCheckoutSession, getAppBaseUrl, isStripeCheckoutUnavailableError } from "@/lib/stripe";
+
+const BOOKING_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const BOOKING_IP_RATE_LIMIT = 8;
+const BOOKING_EMAIL_RATE_LIMIT = 4;
 
 type CheckoutCancelData = {
   tripType: "PICKUP" | "DROPOFF" | "POINT_TO_POINT";
@@ -49,6 +54,18 @@ export async function POST(req: Request) {
   let hasCheckoutSession = false;
 
   try {
+    const ipLimit = checkRateLimit(
+      `booking:${getClientIp(req)}`,
+      BOOKING_IP_RATE_LIMIT,
+      BOOKING_RATE_LIMIT_WINDOW_MS
+    );
+    if (!ipLimit.ok) {
+      return NextResponse.json(
+        { error: t("api.tooManyRequests") },
+        { status: 429, headers: { "Retry-After": String(ipLimit.retryAfterSeconds) } }
+      );
+    }
+
     const json = await req.json();
     const parsed = CreateBookingSchema.safeParse(json);
     if (!parsed.success) {
@@ -56,6 +73,18 @@ export async function POST(req: Request) {
     }
 
     const data = parsed.data;
+    const emailLimit = checkRateLimit(
+      `booking-email:${data.contactEmail.trim().toLowerCase()}`,
+      BOOKING_EMAIL_RATE_LIMIT,
+      BOOKING_RATE_LIMIT_WINDOW_MS
+    );
+    if (!emailLimit.ok) {
+      return NextResponse.json(
+        { error: t("api.tooManyRequests") },
+        { status: 429, headers: { "Retry-After": String(emailLimit.retryAfterSeconds) } }
+      );
+    }
+
     const created = await createPendingBooking(data);
     bookingId = created.bookingId;
 

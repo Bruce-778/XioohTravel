@@ -1,4 +1,13 @@
-export type DataLayerPayload = Record<string, string | number | boolean | null | undefined>;
+type DataLayerValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | DataLayerValue[]
+  | { [key: string]: DataLayerValue };
+
+export type DataLayerPayload = Record<string, DataLayerValue>;
 
 declare global {
   interface Window {

@@ -66,9 +66,12 @@ export function TrackedAnchor({
   children,
   ...props
 }: TrackingProps & AnchorHTMLAttributes<HTMLAnchorElement> & { children: ReactNode }) {
+  const href = props.href;
+
   return (
     <a
       {...props}
+      href={href}
       onClick={(event) => {
         pushDataLayerEvent(eventName, eventPayload);
         onClick?.(event);

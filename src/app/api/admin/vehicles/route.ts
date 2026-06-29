@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/adminAuth";
 import { getT } from "@/lib/i18n";
 
-export async function GET(req: Request) {
+export async function GET() {
   const { t } = await getT();
   const auth = await requireAdmin();
   if (!auth.ok) return NextResponse.json({ error: t(auth.error) }, { status: auth.status });

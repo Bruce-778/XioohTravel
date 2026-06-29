@@ -44,7 +44,7 @@ export async function decrypt(input: string): Promise<AuthPayload | null> {
       algorithms: ["HS256"],
     });
     return payload as AuthPayload;
-  } catch (e) {
+  } catch {
     return null;
   }
 }

@@ -20,7 +20,7 @@ const CONTENT: Record<"zh" | "en", { title: string; updated: string; sections: S
         paragraphs: [
           "当您预订接送服务时，我们收集完成服务所必需的信息：联系人姓名、电话、邮箱、航班号、上下车地址、乘车时间、乘客与行李信息。",
           "当您使用邮箱验证码登录时，我们记录您的邮箱地址以关联您的订单。",
-          "我们使用 Cookie 保存您的语言、币种偏好和登录状态。我们不使用第三方广告或跟踪 Cookie。",
+          "我们使用 Cookie 保存您的语言、币种偏好和登录状态。若启用了 Google Tag Manager、Google Ads 或 Google Analytics，我们也会使用相关第三方技术衡量访问、广告转化和网站效果。",
         ],
       },
       {
@@ -35,6 +35,7 @@ const CONTENT: Record<"zh" | "en", { title: string; updated: string; sections: S
         paragraphs: [
           "付款由 Stripe 处理，我们不存储您的银行卡信息；Stripe 的处理方式见其隐私政策。",
           "地址搜索由 Google Maps/Places 提供，您输入的搜索内容会发送给 Google。",
+          "网站分析与广告转化衡量可能由 Google Tag Manager、Google Ads 或 Google Analytics 提供。您可以通过浏览器或设备设置限制 Cookie 和跟踪。",
           "交易邮件通过 Resend 发送。数据库托管于 Supabase。",
         ],
       },
@@ -62,7 +63,7 @@ const CONTENT: Record<"zh" | "en", { title: string; updated: string; sections: S
         paragraphs: [
           "When you book a transfer we collect what is necessary to deliver the service: contact name, phone, email, flight number, pickup/drop-off addresses, pickup time, passenger and luggage details.",
           "When you sign in with an email verification code, we record your email address to associate your bookings.",
-          "We use cookies to remember your language, currency preference and login session. We do not use third-party advertising or tracking cookies.",
+          "We use cookies to remember your language, currency preference and login session. If Google Tag Manager, Google Ads, or Google Analytics is enabled, related third-party technologies may also be used to measure visits, ad conversions, and site performance.",
         ],
       },
       {
@@ -77,6 +78,7 @@ const CONTENT: Record<"zh" | "en", { title: string; updated: string; sections: S
         paragraphs: [
           "Payments are processed by Stripe; we never store your card details. See Stripe's privacy policy for how they handle data.",
           "Address search is powered by Google Maps/Places; your search input is sent to Google.",
+          "Analytics and ad conversion measurement may be provided by Google Tag Manager, Google Ads, or Google Analytics. You can limit cookies and tracking through your browser or device settings.",
           "Transactional emails are delivered via Resend. Our database is hosted on Supabase.",
         ],
       },
